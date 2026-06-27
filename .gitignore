@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Data — NEVER commit raw or processed data
+data/raw/
+data/processed/
+data/interim/
+data/external/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.pkl
+*.pickle
+!data/README.md
+
+# Model artifacts
+/models/
+*.joblib
+*.cbm
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+
+# Linting
+.ruff_cache/
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Reports (generated figures; keep only source)
+reports/figures/*.png
+reports/figures/*.pdf
+reports/figures/*.svg
+
+# Logs
+*.log
+logs/

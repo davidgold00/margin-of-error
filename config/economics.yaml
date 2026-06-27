@@ -1,0 +1,65 @@
+# ============================================================
+# Margin of Error — Economic Assumptions
+# Version: 0.1.0  |  All PLACEHOLDER values must be reviewed
+# before Phase 2 analysis. Search for "PLACEHOLDER" to find them.
+# Sources are stated estimates unless a citation is given.
+# ============================================================
+
+transaction:
+  # Buyer-side closing costs (title, escrow, inspection, origination fees)
+  # Rationale: typical range 0.5–2%; 1% is a conservative mid-point.
+  # Source: stated estimate; varies by state and lender.
+  buy_side_pct: 0.01
+
+  # Total agent commission (buyer + seller sides, paid by seller at close)
+  # Rationale: traditional 6% split; declining in some markets post-2024 NAR settlement.
+  # Source: NAR historical average; flag for sensitivity analysis.
+  sell_side_pct: 0.06
+
+holding:
+  # Monthly carry cost as a fraction of purchase price
+  # Includes: property taxes, hazard insurance, utilities, basic maintenance
+  # Rationale: ~6% annual cost / 12 months = 0.5% per month [PLACEHOLDER — Iowa-specific taxes
+  #            run ~1.5% annually; adjust when we have county data]
+  monthly_cost_pct: 0.005   # PLACEHOLDER
+
+  # Expected project duration from acquisition to resale closing
+  # Rationale: 6 months is industry rule-of-thumb for light-to-medium renovations.
+  # Source: stated assumption; should be calibrated to local permit timelines.
+  typical_hold_months: 6    # PLACEHOLDER
+
+financing:
+  # Annual interest rate on hard-money / bridge acquisition loan
+  # Rationale: U.S. hard-money rates ranged 9–13% in 2023–2024; 10% is mid-range.
+  # Source: stated estimate. In the Ames dataset era (2006–2010) rates were lower; Phase 4
+  #         backtest should use a time-varying rate series.
+  hard_money_rate: 0.10     # PLACEHOLDER — use time-series for Phase 4
+
+  # Loan-to-value ratio at acquisition
+  # Rationale: hard-money lenders typically lend 65–80% of purchase price.
+  # 80% is the optimistic end; use 70% for conservative sensitivity case.
+  ltv: 0.80                 # PLACEHOLDER
+
+renovation:
+  # Cost estimates for renovatable features in the Ames dataset.
+  # Source: Remodeling Magazine Cost vs. Value Report 2023 (national averages).
+  # CRITICAL PLACEHOLDER: All figures are national averages. Iowa labor and material
+  # costs are typically 10–25% below national; adjust before production use.
+  kitchen_minor_remodel_usd: 27000    # [Remodeling Mag 2023 national avg — PLACEHOLDER]
+  bath_addition_usd: 49000            # Full bathroom addition [PLACEHOLDER]
+  bath_remodel_usd: 11000             # Minor bath remodel [PLACEHOLDER]
+  basement_finish_per_sqft_usd: 35    # Wide range: $25–75/sqft [PLACEHOLDER]
+
+profit:
+  # Minimum net profit (after all costs) required to recommend underwriting.
+  # Both criteria must be met; whichever is more restrictive applies.
+
+  # Minimum as a fraction of After-Repair Value (ARV)
+  # Rationale: 10% margin of ARV leaves headroom for cost overruns and market moves.
+  # Source: stated assumption; industry "70% rule" implies ~30% gross, but that's pre-cost.
+  minimum_margin_pct: 0.10  # PLACEHOLDER — subject to sensitivity analysis in Phase 2
+
+  # Absolute floor regardless of percentage (protects against tiny-deal edge cases)
+  # Rationale: $20k net profit is roughly the minimum that compensates for opportunity cost.
+  # Source: stated assumption.
+  min_absolute_usd: 20000   # PLACEHOLDER

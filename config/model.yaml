@@ -1,0 +1,72 @@
+# ============================================================
+# Margin of Error — Model Configuration
+# Version: 0.1.0
+# All seeds and splits are fixed for reproducibility.
+# To change any value, update here and re-run from scratch.
+# ============================================================
+
+global_seed: 42
+
+data:
+  kaggle_train_path: data/raw/kaggle/train.csv
+  kaggle_test_path: data/raw/kaggle/test.csv
+  ames_full_path: data/raw/ames/AmesHousing.csv
+  description_path: data/raw/ames/data_description.txt
+
+cross_validation:
+  n_folds: 5
+  # Stratify folds by Neighborhood to prevent spatial leakage across folds.
+  # Decision note: pure random folds risk putting all sales from a single
+  # neighborhood into one fold, making OOF predictions implicitly spatially
+  # extrapolated. Neighborhood stratification is a lightweight but meaningful
+  # mitigation. Full spatial CV (e.g., block-group hold-out) is logged as backlog.
+  stratify_by: Neighborhood
+
+target:
+  column: SalePrice
+  # log1p transform stabilizes variance (SalePrice is right-skewed) and
+  # ensures percent errors are symmetric. Remember to expm1() before reporting
+  # dollar figures or computing P&L.
+  transform: log1p
+
+conformal:
+  # 1 - alpha = nominal coverage guarantee for prediction intervals.
+  # alpha: 0.10 → 90% intervals. We report both 80% and 90% in Phase 2.
+  alpha: 0.10
+
+  # Fraction of training data withheld exclusively for conformal calibration.
+  # This data is never seen by the underlying model.
+  # Decision note: 15% of 1460 ≈ 219 rows; sufficient for stable empirical quantiles.
+  # A smaller split wastes calibration guarantee; a larger split wastes training data.
+  # See docs/decisions.md § Conformal calibration split.
+  calibration_split: 0.15
+
+lightgbm:
+  n_estimators: 1000
+  learning_rate: 0.05
+  num_leaves: 63
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  early_stopping_rounds: 50
+
+quantile:
+  # Quantile targets for the lower and upper arms of the CQR model.
+  # These are deliberately inside the final alpha/2 tails because the
+  # conformal step will expand them to achieve exact finite-sample coverage.
+  lower_alpha: 0.05
+  upper_alpha: 0.95
+
+features:
+  # Columns to drop before any modeling.
+  # SaleType / SaleCondition are sale-specific, not property-specific (leakage risk).
+  # YrSold / MoSold are used only in the Phase 4 backtest pipeline, not in cross-section.
+  drop:
+    - Id
+    - SalePrice
+    - SaleType
+    - SaleCondition
+    - YrSold
+    - MoSold

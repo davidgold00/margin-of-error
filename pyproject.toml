@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "margin-of-error"
+version = "0.1.0"
+description = "Uncertainty-aware home valuation engine for fix-and-flip underwriting"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "lightgbm>=4.0",
+    "xgboost>=2.0",
+    "statsmodels>=0.14",
+    "mapie>=0.7",
+    "pandera>=0.18",
+    "matplotlib>=3.7",
+    "plotly>=5.15",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "streamlit>=1.28",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# econml is optional: heavy install (~500 MB, pulls PyTorch).
+# Required only for Phase 3 causal analysis. See docs/decisions.md § Causal library.
+causal = [
+    "econml>=0.15",
+]
+dev = [
+    "ruff>=0.1",
+    "mypy>=1.5",
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pre-commit>=3.5",
+    "ipykernel>=6.25",
+    "nbformat>=5.9",
+    "pandas-stubs>=2.0",
+    "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+data-check = "margin_of_error.data.validate:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["pandera.*", "lightgbm.*", "xgboost.*", "mapie.*", "econml.*", "statsmodels.*", "plotly.*", "streamlit.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src/margin_of_error --cov-report=term-missing -v"
