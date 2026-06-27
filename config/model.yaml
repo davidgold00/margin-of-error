@@ -22,6 +22,28 @@ cross_validation:
   # mitigation. Full spatial CV (e.g., block-group hold-out) is logged as backlog.
   stratify_by: Neighborhood
 
+phase1:
+  cv_repeats: 3
+  inner_cv_folds: 3
+  early_stopping_validation_fraction: 0.15
+  artifact_dir: models/phase1
+  metric_card_path: reports/phase1_metric_card.json
+  residuals_path: reports/phase1_oof_residuals.csv
+  random_split_note: "Kaggle train.csv is a random cross-sectional split; Phase 1 validation does not test temporal regime robustness."
+
+  elastic_net:
+    alpha_grid: [0.0005, 0.001, 0.003, 0.01, 0.03]
+    l1_ratio_grid: [0.1, 0.5, 0.9]
+    max_iter: 20000
+
+  lightgbm_tuning:
+    # Nested inside the outer repeated CV folds. These are intentionally compact:
+    # the Ames training set is small, and Phase 1 needs honest OOF residuals more
+    # than an exhaustive leaderboard search.
+    num_leaves_grid: [31, 63]
+    min_child_samples_grid: [10, 20]
+    reg_lambda_grid: [0.5, 1.0, 2.0]
+
 target:
   column: SalePrice
   # log1p transform stabilizes variance (SalePrice is right-skewed) and

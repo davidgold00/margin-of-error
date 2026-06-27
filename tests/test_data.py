@@ -128,6 +128,7 @@ def test_fill_none_categoricals_replaces_nan() -> None:
 def test_impute_lot_frontage_by_neighborhood() -> None:
     """impute_lot_frontage fills NaN with neighborhood median."""
     import numpy as np
+
     from margin_of_error.data.cleaning import impute_lot_frontage
 
     df = pd.DataFrame(

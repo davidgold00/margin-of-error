@@ -21,16 +21,16 @@ setup:
 
 # ── Quality gates ────────────────────────────────────────────────────────────
 lint:
-	$(RUFF) check src/ tests/
-	$(RUFF) format --check src/ tests/
-	$(MYPY) src/
+	PYTHONPATH=src $(PYTHON) -m ruff check src/ tests/
+	PYTHONPATH=src $(PYTHON) -m ruff format --check src/ tests/
+	PYTHONPATH=src $(PYTHON) -m mypy src/
 
 format:
 	$(RUFF) format src/ tests/
 	$(RUFF) check --fix src/ tests/
 
 test:
-	$(PYTEST)
+	PYTHONPATH=src $(PYTHON) -m pytest
 
 # ── Data pipeline ────────────────────────────────────────────────────────────
 data-check:
@@ -38,7 +38,7 @@ data-check:
 
 # ── Modeling phases (unlocked after approval) ────────────────────────────────
 train:
-	@echo "Phase 1 not yet implemented — awaiting approval."
+	PYTHONPATH=src $(PYTHON) -m margin_of_error.models.baseline
 
 backtest:
 	@echo "Phase 4 not yet implemented — awaiting approval."

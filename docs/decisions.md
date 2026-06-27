@@ -101,3 +101,70 @@ and cannot be naively compared to Phase 4 temporal results.
 - Time-varying hard-money rate series for Phase 4 financing assumptions
 - Iowa-specific renovation cost adjustments (Remodeling Mag national avg is too high)
 - Quantile calibration plots (reliability diagrams) per neighborhood
+
+---
+
+## Phase 1 Decisions
+
+### ADR-006: Log retransformation uses Duan smearing
+
+**Context:** Phase 1 models `log1p(SalePrice)`. A naive `expm1(prediction)` is
+biased low because `E[exp(error)] != exp(E[error])`.
+
+**Decision:** Estimate Duan's smearing factor on each training fold using
+`mean(exp(y_train_log - y_train_pred_log))`, then apply that factor to the
+held-out fold predictions before dollar metrics are computed.
+
+**Tradeoff:** Smearing uses in-fold fitted predictions, so it is still an
+estimate and can vary by fold. It avoids leaking holdout targets and gives a
+more honest dollar-scale error than naive exponentiation.
+
+---
+
+### ADR-007: Fold-safe preprocessing with explicit missingness policy
+
+**Context:** Ames NA values are semantic. Some mean structural absence (no
+garage, no basement, no pool); others are true missing values. Lot frontage is
+missing often enough that global imputation would be both crude and potentially
+leaky if fit before CV.
+
+**Decision:** Build a sklearn preprocessing pipeline that runs inside every CV
+fold. Structural categorical NAs become `"None"`, structural numeric NAs become
+`0`, and true-missing values are imputed by fold-local median/mode. Lot frontage
+uses fold-local neighborhood medians with a fold-local global median fallback.
+
+**Tradeoff:** The policy is more verbose than one `SimpleImputer`, but it keeps
+the data dictionary semantics intact and makes leakage tests possible.
+
+---
+
+### ADR-008: Primary Phase 1 booster is LightGBM
+
+**Context:** The brief allows LightGBM or XGBoost. Both require OpenMP on macOS.
+The project already had a LightGBM config block from Phase 0.
+
+**Decision:** Use LightGBM as the primary gradient-boosting strawman, with
+internal train-fold early stopping and compact nested-CV tuning over tree shape
+and L2 regularization. XGBoost was verified after installing `libomp`, but adding
+a second booster would widen Phase 1 rather than sharpen the baseline.
+
+**Tradeoff:** In this run, ElasticNet slightly beat LightGBM on log RMSE while
+LightGBM slightly beat ElasticNet on dollar RMSE. We keep LightGBM as the
+primary strawman because the phase requires a tuned gradient booster, and we
+report the ElasticNet comparison plainly instead of hiding it.
+
+---
+
+### ADR-009: Repeated CV stratifies by neighborhood with rare-level bucketing
+
+**Context:** `Neighborhood` is the strongest spatial proxy, but the Kaggle
+training split includes at least one neighborhood with fewer than five rows,
+which cannot be split across five stratified folds.
+
+**Decision:** Use 5-fold CV repeated 3 times. Before each repeated stratified
+split, bucket the smallest neighborhood levels into a rare bucket until every
+stratum has at least five rows.
+
+**Tradeoff:** Rare neighborhoods lose individual fold-stratification identity,
+but the alternative is fully random folds. This is still not spatial CV; Phase 4
+handles temporal robustness and spatial CV remains backlog.

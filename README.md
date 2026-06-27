@@ -32,8 +32,8 @@ margin of the deal for the deal to be underwritable by any honest model.*
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
-| 0 | Scaffold + data validation layer | **In progress** |
-| 1 | Baseline gradient boosting model (the strawman) | Pending approval |
+| 0 | Scaffold + data validation layer | Complete |
+| 1 | Baseline gradient boosting model (the strawman) | **Built; awaiting acceptance** |
 | 2 | CQR prediction intervals + flip P&L simulation + underwriting rule | Pending |
 | 3 | Causal estimation of renovation effects (DML) | Pending |
 | 4 | Temporal backtest through 2006–2010 housing crash | Pending |
@@ -55,7 +55,7 @@ source .venv/bin/activate
 # 3. Validate data
 make data-check
 
-# 4. (After Phase 1 approval)
+# 4. Train the Phase 1 baseline
 make train
 
 # 5. (After Phase 5 approval)
@@ -90,16 +90,34 @@ Raw data is git-ignored.
 
 ## Results Summary
 
-*[Placeholder — populated after each phase is completed and reviewed.]*
-
 | Metric | Value | Phase |
 |--------|-------|-------|
-| Baseline CV RMSE (log scale) | TBD | 1 |
-| Baseline dollar error, median home | TBD | 1 |
+| Dumb median CV RMSE (log scale) | 0.400 ± 0.015 | 1 |
+| ElasticNet CV RMSE (log scale) | 0.126 ± 0.019 | 1 |
+| LightGBM CV RMSE (log scale) | 0.135 ± 0.015 | 1 |
+| LightGBM CV RMSE (dollars) | $28,500 ± $6,381 | 1 |
+| LightGBM median absolute dollar error | $9,413 | 1 |
+| LightGBM 80th percentile absolute dollar error | $22,193 | 1 |
 | 90% prediction interval coverage | TBD | 2 |
 | % of "good buys" with margin < uncertainty band | TBD | 2 |
 | Causal effect of kitchen upgrade (CQR-adjusted) | TBD | 3 |
 | Backtest: deals underwritten in 2007 that went negative | TBD | 4 |
+
+### Phase 1 Baseline
+
+Phase 1 uses the Kaggle `train.csv` random cross-sectional split (1,460 rows) and
+models `log1p(SalePrice)`. This validation does **not** test temporal regime
+robustness; Phase 4 pays that debt with the full Ames 2006-2010 time ordering.
+
+All feature learning is inside sklearn pipelines/ColumnTransformers fitted within
+CV folds. Dollar predictions use Duan smearing to correct log retransformation
+bias. The primary strawman artifact is `models/phase1/baseline_lightgbm.joblib`;
+the metric card is `reports/phase1_metric_card.json`.
+
+**Phase 1 framing hypothesis:** A typical fix-and-flip net margin is on the order
+of $10-20K; this model's typical dollar error is $9,413. If that error is
+comparable to or larger than that margin, point predictions cannot safely
+underwrite a flip.
 
 ---
 

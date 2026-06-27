@@ -94,6 +94,30 @@ investment decision.
   controls for it in the DML model. Naive regression coefficients on
   "renovatable" features will be confounded by `OverallQual`.
 
+### Missingness Treatment
+
+- **Assumption:** Ames NA values are interpreted from `data_description.txt`
+  before imputation.
+- **Structural absence:** `Garage*`, `Bsmt*`, `PoolQC`, `FireplaceQu`, `Fence`,
+  `Alley`, `MiscFeature`, and `MasVnrType` NAs mean the feature is absent and are
+  filled as `"None"` or `0` inside the sklearn preprocessing pipeline.
+- **True missingness:** `LotFrontage` is imputed with fold-local neighborhood
+  medians and a fold-local global fallback. Other true-missing numeric/categorical
+  values use fold-local median/mode.
+- **Leakage control:** These values are learned inside CV folds only; no imputer
+  is fit on the full dataset before validation.
+
+### Phase 1 Baseline Results
+
+- **Data:** Kaggle `train.csv`, 1,460 rows, random cross-sectional split.
+- **Validation:** 5-fold CV repeated 3 times; folds are stratified by neighborhood
+  after rare-neighborhood bucketing.
+- **Primary strawman:** LightGBM on `log1p(SalePrice)` with Duan-smearing dollar
+  retransformation.
+- **Result:** LightGBM RMSE is `0.135 ± 0.015` in log space and `$28,500 ± $6,381`
+  in dollar space. Median absolute OOF dollar error is `$9,413`; the 80th
+  percentile absolute error is `$22,193`.
+
 ---
 
 ## Data Assumptions

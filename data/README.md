@@ -28,6 +28,17 @@ kaggle competitions download -c house-prices-advanced-regression-techniques -p d
 unzip data/raw/kaggle/house-prices-advanced-regression-techniques.zip -d data/raw/kaggle/
 
 # Option B: Manual download from the Kaggle competition page (requires login).
+
+# Option C: OpenML mirror used for Phase 1 reproducibility if Kaggle auth is absent.
+python3 -c "
+from sklearn.datasets import fetch_openml
+from pathlib import Path
+data = fetch_openml(name='house_prices', as_frame=True, parser='auto')
+out = Path('data/raw/kaggle/train.csv')
+out.parent.mkdir(parents=True, exist_ok=True)
+data.frame.to_csv(out, index=False)
+print(data.frame.shape)
+"
 ```
 
 **Important caveat:** The Kaggle train/test split is **random**, not temporal. This

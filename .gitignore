@@ -21,6 +21,7 @@ data/processed/
 data/interim/
 data/external/
 *.csv
+!reports/phase1_oof_residuals.csv
 *.parquet
 *.feather
 *.h5
@@ -30,7 +31,12 @@ data/external/
 
 # Model artifacts
 /models/
+!/models/
+/models/*
+!/models/phase1/
+!/models/phase1/baseline_lightgbm.joblib
 *.joblib
+!models/phase1/baseline_lightgbm.joblib
 *.cbm
 
 # Notebooks checkpoints
@@ -69,6 +75,7 @@ htmlcov/
 reports/figures/*.png
 reports/figures/*.pdf
 reports/figures/*.svg
+!reports/figures/01_price_error_vs_home_price.svg
 
 # Logs
 *.log

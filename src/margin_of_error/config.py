@@ -111,6 +111,38 @@ class CrossValidationConfig(BaseModel):
     stratify_by: str = Field(description="Column to stratify fold assignment")
 
 
+class ElasticNetTuningConfig(BaseModel):
+    """Hyperparameter grid for the Phase 1 regularized linear baseline."""
+
+    alpha_grid: list[float] = Field(description="ElasticNet alpha values to search")
+    l1_ratio_grid: list[float] = Field(description="ElasticNet l1_ratio values to search")
+    max_iter: int = Field(gt=0, description="Maximum coordinate descent iterations")
+
+
+class LightGBMTuningConfig(BaseModel):
+    """Compact nested-CV grid for the Phase 1 LightGBM strawman."""
+
+    num_leaves_grid: list[int] = Field(description="LightGBM num_leaves values")
+    min_child_samples_grid: list[int] = Field(description="LightGBM min_child_samples values")
+    reg_lambda_grid: list[float] = Field(description="LightGBM L2 regularization values")
+
+
+class Phase1Config(BaseModel):
+    """Settings specific to Phase 1 baseline modeling."""
+
+    cv_repeats: int = Field(ge=1, description="Number of repeated CV passes")
+    inner_cv_folds: int = Field(ge=2, description="Nested CV folds for tuning")
+    early_stopping_validation_fraction: float = Field(
+        gt=0, lt=0.5, description="Train-fold fraction held out for booster early stopping"
+    )
+    artifact_dir: Path = Field(description="Directory for Phase 1 trained artifacts")
+    metric_card_path: Path = Field(description="JSON metric card output path")
+    residuals_path: Path = Field(description="CSV residual diagnostics output path")
+    random_split_note: str = Field(description="Reminder about Kaggle random split limitation")
+    elastic_net: ElasticNetTuningConfig
+    lightgbm_tuning: LightGBMTuningConfig
+
+
 class TargetConfig(BaseModel):
     column: str = Field(description="Name of the target column in the dataset")
     transform: str = Field(description="Transformation applied before modeling (log1p or none)")
@@ -156,6 +188,7 @@ class ModelConfig(BaseModel):
     global_seed: int
     data: DataPaths
     cross_validation: CrossValidationConfig
+    phase1: Phase1Config
     target: TargetConfig
     conformal: ConformalConfig
     lightgbm: LightGBMConfig

@@ -24,6 +24,13 @@ def _has_positive_values(df: pd.DataFrame, column: str) -> pd.Series:
     return (df[column] > 0).astype(int)
 
 
+def _series_or_zero(df: pd.DataFrame, column: str) -> pd.Series:
+    """Return a numeric column when present, otherwise a zero series."""
+    if column not in df.columns:
+        return pd.Series(0, index=df.index)
+    return df[column].fillna(0)
+
+
 # Ordinal encoding mappings for quality/condition fields.
 # Higher integer = better quality (consistent with OverallQual 1–10 scale).
 QUALITY_ORDER = ["None", "Po", "Fa", "TA", "Gd", "Ex"]
@@ -75,12 +82,13 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     All derived features are transformations of existing columns — no
     information leakage from the target.
 
-    Phase 1 candidate features:
+    Phase 1 features:
         - TotalSF: GrLivArea + TotalBsmtSF (total finished sqft)
         - HouseAge: YrSold - YearBuilt
         - RemodAge: YrSold - YearRemodAdd
         - TotalBaths: FullBath + 0.5*HalfBath + BsmtFullBath + 0.5*BsmtHalfBath
-        - HasPool, HasGarage, HasFireplace (indicator variables)
+        - TotalPorchSF: deck + open/enclosed/3-season/screen porch sqft
+        - HasPool, HasGarage, HasFireplace, Has2ndFloor, HasRemodeled indicators
 
     Args:
         df: DataFrame with cleaned and ordinal-encoded columns.
@@ -91,18 +99,28 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
 
     # Aggregate size features
-    result["TotalSF"] = result.get("GrLivArea", 0) + result.get("TotalBsmtSF", 0)
+    result["TotalSF"] = _series_or_zero(result, "GrLivArea") + _series_or_zero(
+        result, "TotalBsmtSF"
+    )
     result["TotalBaths"] = (
-        result.get("FullBath", 0)
-        + 0.5 * result.get("HalfBath", 0)
-        + result.get("BsmtFullBath", 0)
-        + 0.5 * result.get("BsmtHalfBath", 0)
+        _series_or_zero(result, "FullBath")
+        + 0.5 * _series_or_zero(result, "HalfBath")
+        + _series_or_zero(result, "BsmtFullBath")
+        + 0.5 * _series_or_zero(result, "BsmtHalfBath")
+    )
+    result["TotalPorchSF"] = (
+        _series_or_zero(result, "WoodDeckSF")
+        + _series_or_zero(result, "OpenPorchSF")
+        + _series_or_zero(result, "EnclosedPorch")
+        + _series_or_zero(result, "3SsnPorch")
+        + _series_or_zero(result, "ScreenPorch")
     )
 
     # Age features (requires YrSold)
-    if "YrSold" in result.columns:
+    if {"YrSold", "YearBuilt", "YearRemodAdd"}.issubset(result.columns):
         result["HouseAge"] = result["YrSold"] - result["YearBuilt"]
         result["RemodAge"] = result["YrSold"] - result["YearRemodAdd"]
+        result["HasRemodeled"] = (result["YearRemodAdd"] > result["YearBuilt"]).astype(int)
 
     # Binary indicators
     result["HasPool"] = _has_positive_values(result, "PoolArea")

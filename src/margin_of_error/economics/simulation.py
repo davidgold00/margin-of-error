@@ -31,7 +31,7 @@ awaiting Phase 2 approval.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import NamedTuple
 
 import numpy as np
@@ -39,14 +39,14 @@ import numpy as np
 from margin_of_error.config import EconomicsConfig
 
 
-class UnderwriteDecision(str, Enum):
+class UnderwriteDecision(StrEnum):
     """Possible outcomes from the underwriting decision rule."""
 
     UNDERWRITE = "UNDERWRITE"
     DECLINE = "DECLINE"
 
 
-class UnderwiteReason(str, Enum):
+class UnderwiteReason(StrEnum):
     """Human-readable reason for a DECLINE decision."""
 
     PROFIT_BELOW_FLOOR = "Projected profit below minimum dollar floor"

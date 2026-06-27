@@ -25,6 +25,7 @@ def test_kaggle_test_schema_accepts_valid_data(minimal_test_df: pd.DataFrame) ->
 def test_schema_rejects_invalid_overall_qual(minimal_train_df: pd.DataFrame) -> None:
     """KAGGLE_TRAIN_SCHEMA rejects OverallQual outside [1, 10]."""
     import pandera
+
     from margin_of_error.data.schemas import validate_kaggle_train
 
     bad_df = minimal_train_df.copy()
@@ -37,6 +38,7 @@ def test_schema_rejects_invalid_overall_qual(minimal_train_df: pd.DataFrame) -> 
 def test_schema_rejects_negative_sale_price(minimal_train_df: pd.DataFrame) -> None:
     """KAGGLE_TRAIN_SCHEMA rejects non-positive SalePrice."""
     import pandera
+
     from margin_of_error.data.schemas import validate_kaggle_train
 
     bad_df = minimal_train_df.copy()
@@ -49,6 +51,7 @@ def test_schema_rejects_negative_sale_price(minimal_train_df: pd.DataFrame) -> N
 def test_schema_rejects_invalid_yr_sold(minimal_train_df: pd.DataFrame) -> None:
     """KAGGLE_TRAIN_SCHEMA rejects YrSold outside [2006, 2010]."""
     import pandera
+
     from margin_of_error.data.schemas import validate_kaggle_train
 
     bad_df = minimal_train_df.copy()
@@ -61,6 +64,7 @@ def test_schema_rejects_invalid_yr_sold(minimal_train_df: pd.DataFrame) -> None:
 def test_schema_rejects_invalid_quality_code(minimal_train_df: pd.DataFrame) -> None:
     """KAGGLE_TRAIN_SCHEMA rejects unknown quality codes."""
     import pandera
+
     from margin_of_error.data.schemas import validate_kaggle_train
 
     bad_df = minimal_train_df.copy()
