@@ -165,6 +165,58 @@ has one coherent, reviewable source of truth. See ADR-012/013/014 in decisions.m
 - **Leakage control:** These values are learned inside CV folds only; no imputer
   is fit on the full dataset before validation.
 
+### Phase 3 Causal Identification
+
+- **Estimand:** each DML coefficient is the average causal effect of a one-unit
+  treatment increase on `log1p(SalePrice)`, reported in dollars as
+  `coefficient × median(SalePrice)`. This is a local approximation around the
+  median Ames sale price, not an exact global dollar transformation.
+- **Conditional independence assumption (CIA):** conditional on the fixed feature
+  registry plus `OverallQual` and `OverallCond`, treatment assignment is assumed
+  plausibly as-good-as-random. The argument is that renovation choices in Ames are
+  strongly tied to property quality, age, size, structural constraints, and
+  neighborhood, all of which are represented in W.
+- **Remaining threats:** unobserved owner wealth, undocumented deferred
+  maintenance, contractor quality, permit constraints, and micro-location effects
+  may still affect both treatment quality and sale price. Phase 3 estimates are
+  therefore decision-grade observational estimates, not randomized-trial truth.
+- **Cross-sectional scope:** Phase 3 uses the Kaggle random cross-section. It does
+  not prove the same renovation effects held during every month of the 2006-2010
+  crash regime; Phase 4 tests temporal robustness.
+
+### Phase 3 Treatment Definitions
+
+Every treatment below is included only if it appears in the Phase 1 mutable
+registry. One-unit meanings are the actual units used by DML.
+
+| Treatment | One-unit meaning | Renovatable rationale | Caveat |
+|---|---|---|---|
+| `KitchenQual` | One ordinal quality step | Kitchen quality is directly changed by a kitchen renovation. | Ordinal spacing is assumed equal. |
+| `BsmtFinType1` | One basement-finish step | Basement finish can be improved. | Finish type also reflects existing basement layout. |
+| `HeatingQC` | One ordinal quality step | HVAC quality/condition can be upgraded. | May proxy unobserved system age. |
+| `FireplaceQu` | One ordinal quality step | Fireplace finish can be improved. | NA is structural absence and encoded as 0. |
+| `GarageFinish` | One garage-finish step | Garage interior finish can be improved. | Garage size remains a fixed confounder. |
+| `ExterQual` | One ordinal quality step | Exterior finish/materials can be upgraded. | Ambiguous: partly cosmetic, partly structural; included with caution. |
+| `FullBath` | One full bathroom | Bathroom additions/remodels are investor scope. | Adding plumbing may be structurally constrained. |
+| `HalfBath` | One half bathroom | Half-bath additions/remodels are investor scope. | CI crosses zero in Phase 3. |
+| `BsmtFullBath` | One basement full bathroom | Basement bath additions are renovation scope. | Depends on basement feasibility. |
+
+Brief-recommended `BsmtQual`, `Fireplaces`, and `GarageCars` were excluded as
+treatments because the registry tags them fixed. `OverallQual` and `OverallCond`
+are not treatments; they are confounders in the DML specification.
+
+### Phase 3 Sensitivity Check
+
+The informal sensitivity ratio in `reports/phase3_metric_card.json` is
+`DML causal estimate / naive OLS estimate`. It is a rough Kling-Manski-style
+screen, not a formal bound. The top three absolute causal effects were:
+
+| Feature | DML causal | Naive OLS | Ratio |
+|---|---:|---:|---:|
+| `BsmtFullBath` | $8,520 | $9,581 | 0.89 |
+| `ExterQual` | $5,634 | $425 | 13.25 |
+| `KitchenQual` | $4,450 | $4,146 | 1.07 |
+
 ### Phase 1 Baseline Results
 
 - **Data:** Kaggle `train.csv`, 1,460 rows, random cross-sectional split.

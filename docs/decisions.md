@@ -53,8 +53,11 @@ compatibility; (3) it directly computes confidence intervals on CATE estimates,
 which we need to contrast with naive regression coefficients.
 
 **Tradeoff:** EconML is a heavy install (~500 MB, pulls PyTorch). Isolated in the
-optional `[causal]` extra so Phase 0–2 installs stay light. Phase 3 requires
-`pip install -e '.[causal]'`.
+optional `[causal]` extra so the default install stays light.
+
+**Phase 3 update:** Superseded by ADR-015. EconML was not installed in the active
+project environment, so the accepted Phase 3 path is a manual cross-fitted DML
+implementation with LightGBM nuisance models and statsmodels inference.
 
 ---
 
@@ -279,3 +282,116 @@ half-width to a working std — and holding period ~ truncated Normal(base=4, st
 acknowledged simplification (it ignores any skew the conformal interval captures).
 It is transparent, reproducible, and conservative enough for an underwriting screen;
 a fuller treatment (sampling the empirical conformal distribution) is backlog.
+
+---
+
+## Phase 3 Decisions
+
+### ADR-015: Manual cross-fitted DML instead of EconML
+
+**Context:** The Phase 3 brief preferred EconML `LinearDML` if available, with a
+manual cross-fitted DML fallback if installation was unavailable. The repo's venv
+did not have EconML installed, and adding the heavy optional dependency would have
+expanded the environment for no statistical benefit.
+
+**Decision:** Implement DML manually in `src/margin_of_error/causal/dml.py`:
+5-fold cross-fitting, LightGBM nuisance models for both `E[Y|W]` and `E[T|W]`,
+then HC3-robust OLS of residualized `log1p(SalePrice)` on residualized treatment.
+The implementation persists fold records so tests can verify no test fold was used
+to fit the nuisance model that generated its residuals.
+
+**Tradeoff:** We do not get EconML's convenience wrappers or future CausalForestDML
+API for free. In exchange, the estimator is short, auditable, reproducible, and
+does not require a large new dependency.
+
+### ADR-016: Cross-fitting is mandatory for the causal stage
+
+**Context:** DML uses flexible ML models to partial out confounders. If the same
+rows are used to fit and residualize, regularized learners can overfit the
+nuisance functions, biasing residuals toward zero and attenuating the final
+coefficient.
+
+**Decision:** Use 5-fold cross-fitting seeded by `global_seed=42`. For each fold,
+the outcome and treatment nuisance models are fit on the other four folds only and
+predict the held-out fold. Residuals are stacked, and only then is the final OLS
+stage fit.
+
+**Tradeoff:** Five folds multiply nuisance-model fits, but the Ames data is small
+enough that the full Phase 3 run completes quickly. This is not optional plumbing;
+it is what makes the DML coefficient honest enough to report.
+
+### ADR-017: Estimate one treatment at a time
+
+**Context:** A joint multivariate treatment regression could estimate all
+renovation effects at once, but it requires stronger assumptions about treatment
+dependence and interpretation. Kitchen, bath, basement, and garage improvements
+are not independent in investor behavior.
+
+**Decision:** Run the full DML pipeline independently per treatment. The comparison
+table therefore answers "what is the marginal effect of this treatment, controlling
+for fixed confounders?" without asking the reader to parse a joint treatment graph.
+
+**Tradeoff:** Separate models are less statistically efficient than a correctly
+specified joint model. The interpretation is cleaner for a portfolio project and
+reduces the risk of reporting spurious precision.
+
+### ADR-018: Registry wins over the recommended treatment list
+
+**Context:** The Phase 3 brief recommended `BsmtQual`, `Fireplaces`, and
+`GarageCars` as candidate treatments. The Phase 1 registry tags all three fixed.
+It also tags `OverallCond` mutable, while the Phase 3 brief explicitly says
+`OverallCond` should be a confounder, not a treatment.
+
+**Decision:** Treat the registry as the source of truth for treatment eligibility,
+with the Phase 3 brief's `OverallQual`/`OverallCond` rule as an explicit override.
+Included treatments are `KitchenQual`, `BsmtFinType1`, `HeatingQC`, `FireplaceQu`,
+`GarageFinish`, `ExterQual`, `FullBath`, `HalfBath`, and `BsmtFullBath`. Excluded
+brief candidates are reported in `reports/phase3_metric_card.json`.
+
+**Tradeoff:** The final treatment set is narrower than the brief's wish list, but
+it preserves the precommitted mutable/fixed boundary and avoids inventing tags
+after seeing results.
+
+### ADR-019: Figure 3A omits naive OLS error bars
+
+**Context:** The naive OLS coefficients have standard errors, but Figure 3A's job
+is to make the confounding gap legible: naive estimate versus DML estimate, with
+uncertainty around the causal estimate.
+
+**Decision:** Plot DML 95% confidence intervals only. The full CSV still includes
+the underlying inferential fields; the visual keeps attention on the causal
+estimate and the investor-relevant bias gap.
+
+**Tradeoff:** The naive estimates may look visually more certain than they are.
+The chart title, docs, and CSV make clear that naive OLS is a foil, not a
+recommended estimator.
+
+### ADR-020: Heterogeneous treatment effects are backlog
+
+**Context:** The brief listed CausalForestDML as an optional extension to estimate
+heterogeneous kitchen effects by neighborhood or home size. EconML was not present,
+and a manual causal forest implementation would be a separate modeling project.
+
+**Decision:** Skip HTE for Phase 3 and backlog it. Phase 3 ships the linear DML
+layer, comparison table, underwriting integration, and signature visuals.
+
+**Tradeoff:** We do not yet know whether kitchen effects vary by neighborhood
+median price or `GrLivArea`. Phase 4's temporal robustness question is the next
+approved phase; HTE can return after that if needed.
+
+### ADR-021: No verdict flips is a result, not a failure
+
+**Context:** The Phase 3 brief expected homes where correlational and causal
+renovation assumptions change the underwriting verdict. Under the current
+70%-rule purchase model and the hard interval-width override, the representative
+10-home comparison produced zero verdict flips.
+
+**Decision:** Report zero flips honestly and still plot Figure 3C for the largest
+profit-distribution deltas. The causal uplifts materially change expected profit,
+but not enough to cross the APPROVE/DECLINE thresholds in the representative
+sample.
+
+**Tradeoff:** The demonstration is less dramatic than a flip table. It is more
+credible: Phase 2 already showed the interval-width guardrail dominates decisions,
+so Phase 3 appropriately changes renovation economics without pretending it
+overrides uncertainty.

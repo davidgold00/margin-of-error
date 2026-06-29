@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     import numpy as np
     import pandas as pd
 
+    from margin_of_error.config import EconomicsConfig
+
 logger = logging.getLogger(__name__)
 
 FIGURES_DIR = Path("reports/figures")
@@ -495,9 +497,9 @@ def plot_calibration(
 
 def plot_naive_vs_causal(
     effects_df: pd.DataFrame,
-    save_as: str | None = "03_naive_vs_causal.png",
+    save_as: str | None = "03a_confounding_gap.png",
 ) -> plt.Figure:
-    """Phase 3: comparison chart of naive OLS vs. DML causal effect estimates.
+    """Figure 3A — confounding gap: naive OLS vs. DML causal estimates.
 
     Args:
         effects_df: DataFrame from causal/dml.py compare_naive_vs_causal().
@@ -506,7 +508,206 @@ def plot_naive_vs_causal(
     Returns:
         matplotlib Figure.
     """
-    raise NotImplementedError("Phase 3 not yet implemented — awaiting approval")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    frame = effects_df.sort_values("DML Causal ($)", ascending=True).reset_index(drop=True)
+    y = np.arange(len(frame))
+    height = 0.36
+
+    fig, ax = plt.subplots(figsize=(11, max(5.5, 0.55 * len(frame))))
+    ax.barh(
+        y - height / 2,
+        frame["Naive OLS ($)"],
+        height=height,
+        color="#C44E52",
+        alpha=0.86,
+        label="Naive OLS",
+    )
+    causal = frame["DML Causal ($)"].to_numpy(dtype=float)
+    ci_low = frame["DML CI Low ($)"].to_numpy(dtype=float)
+    ci_high = frame["DML CI High ($)"].to_numpy(dtype=float)
+    ax.barh(
+        y + height / 2,
+        causal,
+        height=height,
+        color="#4C78A8",
+        alpha=0.9,
+        label="DML causal",
+        xerr=np.vstack([causal - ci_low, ci_high - causal]),
+        error_kw={"elinewidth": 1.1, "capsize": 3, "ecolor": "#2A2A2A"},
+    )
+
+    ax.axvline(0, color="#222222", linewidth=1)
+    ax.set_yticks(y)
+    ax.set_yticklabels(frame["Feature"])
+    ax.set_xlabel("Estimated value per treatment unit ($)")
+    ax.set_title(
+        "What Renovations Are Actually Worth: Causal vs. Naive Estimates",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.legend(loc="lower right")
+    ax.grid(axis="x", alpha=0.22)
+
+    annotate = frame.assign(abs_bias=frame["Bias ($)"].abs()).nlargest(3, "abs_bias")
+    for _, row in annotate.iterrows():
+        idx = int(frame.index[frame["Feature"] == row["Feature"]][0])
+        x = float(row["DML Causal ($)"])
+        bias = float(row["Bias ($)"])
+        word = "overstates" if bias > 0 else "understates"
+        ax.annotate(
+            f"Naive {word} by ${abs(bias):,.0f}",
+            xy=(x, idx + height / 2),
+            xytext=(8, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=8.5,
+            color="#222222",
+        )
+
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
+
+
+def plot_renovation_decision_matrix(
+    effects_df: pd.DataFrame,
+    save_as: str | None = "03b_renovation_decision_matrix.png",
+) -> plt.Figure:
+    """Figure 3B — causal return vs. typical renovation cost."""
+    import matplotlib.pyplot as plt
+
+    frame = effects_df.dropna(subset=["Treatment Cost ($)"]).copy()
+    if frame.empty:
+        raise ValueError("Treatment Cost ($) is required for the decision matrix")
+
+    cost_cutoff = float(frame["Treatment Cost ($)"].median())
+    fig, ax = plt.subplots(figsize=(10.5, 7))
+    significant = frame["Statistically Significant?"].astype(bool)
+    colors = significant.map({True: "#4C78A8", False: "#9C755F"})
+    ax.scatter(
+        frame["DML Causal ($)"],
+        frame["Treatment Cost ($)"],
+        s=95,
+        c=colors,
+        edgecolor="#222222",
+        linewidth=0.7,
+        alpha=0.9,
+    )
+    for _, row in frame.iterrows():
+        ax.annotate(
+            str(row["Feature"]),
+            (float(row["DML Causal ($)"]), float(row["Treatment Cost ($)"])),
+            textcoords="offset points",
+            xytext=(6, 5),
+            fontsize=8.5,
+        )
+
+    ax.axvline(0, color="#333333", linewidth=1)
+    ax.axhline(cost_cutoff, color="#777777", linestyle="--", linewidth=1)
+    ax.set_xlabel("DML causal effect per unit ($)")
+    ax.set_ylabel("Typical renovation cost from config ($)")
+    ax.set_title("The Renovation Decision Matrix", fontsize=13, fontweight="bold")
+    ax.grid(alpha=0.22)
+
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    ax.text(xmin, ymax, "High cost, low return -- avoid", va="top", ha="left", fontsize=9)
+    ax.text(xmax, ymax, "High cost, high return -- selective", va="top", ha="right", fontsize=9)
+    ax.text(xmin, ymin, "Low cost, low return -- skip", va="bottom", ha="left", fontsize=9)
+    ax.text(xmax, ymin, "Low cost, high return -- always do", va="bottom", ha="right", fontsize=9)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
+
+
+def plot_verdict_flip_distributions(
+    comparison_df: pd.DataFrame,
+    economics: EconomicsConfig,
+    save_as: str | None = "03c_verdict_flip_distributions.png",
+) -> plt.Figure:
+    """Figure 3C — before/after profit distributions for changed decisions."""
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    from margin_of_error.economics.simulation import sample_flip_profit
+    from margin_of_error.economics.underwriter import underwrite_best_tier
+
+    frame = comparison_df.copy()
+    if "verdict_changed" in frame.columns and frame["verdict_changed"].any():
+        frame = frame.loc[frame["verdict_changed"]].copy()
+    elif "expected_profit_delta" in frame.columns:
+        ordered_index = frame["expected_profit_delta"].abs().sort_values(ascending=False).index
+        frame = frame.reindex(ordered_index)
+    frame = frame.head(10).reset_index(drop=True)
+    if frame.empty:
+        raise ValueError("At least one underwriting comparison row is required")
+
+    n = len(frame)
+    cols = 2
+    rows = int(np.ceil(n / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(12, max(4, rows * 2.7)), squeeze=False)
+    for ax, (_, row) in zip(axes.ravel(), frame.iterrows(), strict=False):
+        base = float(row["base_predicted_arv"])
+        low = float(row["interval_low_90"])
+        high = float(row["interval_high_90"])
+        corr = underwrite_best_tier(base, low, high, economics, uplift_mode="correlational")
+        causal = underwrite_best_tier(base, low, high, economics, uplift_mode="causal")
+        corr_cost = economics.flip.renovation_tiers[corr.renovation_tier].cost_usd
+        causal_cost = economics.flip.renovation_tiers[causal.renovation_tier].cost_usd
+        corr_profit = sample_flip_profit(
+            corr.predicted_arv,
+            corr.interval_low,
+            corr.interval_high,
+            corr_cost,
+            economics,
+            purchase_price=corr.purchase_price,
+            seed=17,
+        )
+        causal_profit = sample_flip_profit(
+            causal.predicted_arv,
+            causal.interval_low,
+            causal.interval_high,
+            causal_cost,
+            economics,
+            purchase_price=causal.purchase_price,
+            seed=23,
+        )
+        bins = np.linspace(
+            min(float(corr_profit.min()), float(causal_profit.min())),
+            max(float(corr_profit.max()), float(causal_profit.max())),
+            34,
+        )
+        ax.hist(
+            corr_profit,
+            bins=bins,
+            density=True,
+            histtype="step",
+            linewidth=1.8,
+            color="#C44E52",
+            label=f"Prior: {corr.verdict}",
+        )
+        ax.hist(
+            causal_profit,
+            bins=bins,
+            density=True,
+            histtype="step",
+            linewidth=1.8,
+            color="#4C78A8",
+            label=f"Causal: {causal.verdict}",
+        )
+        ax.axvline(0, color="#222222", linewidth=0.9)
+        ax.set_title(f"Id {int(row['Id'])}", fontsize=9.5)
+        ax.tick_params(labelsize=8)
+        ax.legend(fontsize=7, loc="upper left")
+    for ax in axes.ravel()[n:]:
+        ax.axis("off")
+    fig.suptitle(
+        "Decisions That Change When You Get the Causality Right",
+        fontsize=13,
+        fontweight="bold",
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    return _save_or_show(fig, save_as)
 
 
 def plot_backtest_equity(

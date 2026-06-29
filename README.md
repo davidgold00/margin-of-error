@@ -33,9 +33,9 @@ margin of the deal for the deal to be underwritable by any honest model.*
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 0 | Scaffold + data validation layer | Complete |
-| 1 | Baseline gradient boosting model (the strawman) | **Built; awaiting acceptance** |
-| 2 | CQR prediction intervals + flip P&L simulation + underwriting rule | Pending |
-| 3 | Causal estimation of renovation effects (DML) | Pending |
+| 1 | Baseline gradient boosting model (the strawman) | Complete |
+| 2 | CQR prediction intervals + flip P&L simulation + underwriting rule | Complete |
+| 3 | Causal estimation of renovation effects (DML) | Complete |
 | 4 | Temporal backtest through 2006–2010 housing crash | Pending |
 | 5 | Streamlit underwriting tool + strategy memo | Pending |
 
@@ -58,7 +58,13 @@ make data-check
 # 4. Train the Phase 1 baseline
 make train
 
-# 5. (After Phase 5 approval)
+# 5. Run Phase 2 intervals + underwriting
+make uncertainty
+
+# 6. Run Phase 3 causal estimates
+make causal
+
+# 7. (After Phase 5 approval)
 make app
 ```
 
@@ -102,7 +108,9 @@ Raw data is git-ignored.
 | Median 90% interval width | $64,025 | 2 |
 | Underwriting verdicts (APPROVE / REFER / DECLINE) | 43% / 0% / 56% | 2 |
 | Top-50 naive "best buys" that fail the gate | 50 / 50 (100%) | 2 |
-| Causal effect of kitchen upgrade (CQR-adjusted) | TBD | 3 |
+| DML causal effect of one kitchen-quality step | $4,450 | 3 |
+| Largest naive-vs-causal bias | ExterQual: naive understates by $5,208 | 3 |
+| Phase 3 representative-home verdict flips | 0 / 10 | 3 |
 | Backtest: deals underwritten in 2007 that went negative | TBD | 4 |
 
 ### Phase 1 Baseline
@@ -155,6 +163,40 @@ The argument is narrated in `notebooks/02_uncertainty.ipynb`.
 
 The renovation **uplift** numbers (4/10/18%) are conservative *priors*, not
 findings — Phase 3 replaces them with data-derived causal estimates.
+
+### Phase 3 — Causal Renovation Effects
+
+Phase 3 asks a different question than prediction: which renovations *cause*
+sale-price lift after controlling for the confounders that make naive coefficients
+misleading? The implementation uses manual 5-fold cross-fitted Double Machine
+Learning: LightGBM residualizes both `log1p(SalePrice)` and each treatment on the
+fixed/confounding feature set, then HC3-robust OLS estimates the residual-on-
+residual causal coefficient. Dollar effects use the local approximation
+`coefficient × median(SalePrice)`.
+
+Reproduce: `python -m margin_of_error.causal.dml` or `make causal` → writes
+`reports/phase3_causal_effects.csv`, `reports/phase3_underwriting_comparison.csv`,
+`reports/phase3_metric_card.json`, populates `config/economics.yaml`
+`causal_renovation_uplifts`, and saves figures `reports/figures/03*.png`.
+
+| Feature | Naive OLS | DML Causal | 95% CI | Significant? | Bias |
+|---|---:|---:|---:|---|---:|
+| ExterQual | $425 | $5,634 | $2,063 to $9,204 | yes | -$5,208 |
+| FullBath | -$445 | $2,492 | -$2,165 to $7,148 | no | -$2,937 |
+| HalfBath | $4,238 | $2,481 | -$683 to $5,645 | no | $1,757 |
+| BsmtFullBath | $9,581 | $8,520 | $5,717 to $11,323 | yes | $1,062 |
+| GarageFinish | $2,641 | $3,524 | $1,619 to $5,429 | yes | -$883 |
+| FireplaceQu | $932 | $1,699 | -$1,171 to $4,568 | no | -$766 |
+| HeatingQC | $2,087 | $1,548 | -$23 to $3,119 | no | $539 |
+| KitchenQual | $4,146 | $4,450 | $1,824 to $7,076 | yes | -$304 |
+| BsmtFinType1 | $2,468 | $2,429 | $1,818 to $3,040 | yes | $39 |
+
+Registry verification excluded `BsmtQual`, `Fireplaces`, and `GarageCars` as
+treatments because the Phase 1 registry tags them fixed; `OverallQual` and
+`OverallCond` are forced confounders. In the 10 representative Phase 2 homes,
+causal-vs-correlational renovation assumptions produced **0 verdict flips** under
+the current 70%-rule/interval-width guardrail. The profit distributions still move
+materially, but not enough to cross the APPROVE / DECLINE thresholds in this sample.
 
 ---
 

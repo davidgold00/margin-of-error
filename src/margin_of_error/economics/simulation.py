@@ -305,8 +305,44 @@ def simulate_flip_profit(
         ProfitSummary with mean/std/p10/p90/P(loss)/P(profit > buffer).
     """
     flip = economics.flip
-    n = flip.monte_carlo_samples
     buffer = flip.underwriting.minimum_underwrite_margin_buffer_usd
+    if purchase_price is None:
+        purchase_price = maximum_allowable_offer(arv_point, renovation_cost, flip)
+
+    profit = sample_flip_profit(
+        arv_point=arv_point,
+        arv_lower=arv_lower,
+        arv_upper=arv_upper,
+        renovation_cost=renovation_cost,
+        economics=economics,
+        purchase_price=purchase_price,
+        seed=seed,
+    )
+
+    return ProfitSummary(
+        purchase_price=float(purchase_price),
+        renovation_cost=float(renovation_cost),
+        mean_profit=float(np.mean(profit)),
+        std_profit=float(np.std(profit)),
+        profit_p10=float(np.percentile(profit, 10)),
+        profit_p90=float(np.percentile(profit, 90)),
+        prob_loss=float(np.mean(profit < 0)),
+        prob_above_min_margin=float(np.mean(profit > buffer)),
+    )
+
+
+def sample_flip_profit(
+    arv_point: float,
+    arv_lower: float,
+    arv_upper: float,
+    renovation_cost: float,
+    economics: EconomicsConfig,
+    purchase_price: float | None = None,
+    seed: int = 42,
+) -> np.ndarray:
+    """Return raw Monte Carlo profit draws for visualization diagnostics."""
+    flip = economics.flip
+    n = flip.monte_carlo_samples
     if purchase_price is None:
         purchase_price = maximum_allowable_offer(arv_point, renovation_cost, flip)
 
@@ -324,18 +360,7 @@ def simulate_flip_profit(
 
     transaction_cost = purchase_price * flip.transaction_cost_pct
     holding_cost = purchase_price * flip.holding_cost_monthly_pct * hold_samples
-    profit = arv_samples - purchase_price - renovation_cost - transaction_cost - holding_cost
-
-    return ProfitSummary(
-        purchase_price=float(purchase_price),
-        renovation_cost=float(renovation_cost),
-        mean_profit=float(np.mean(profit)),
-        std_profit=float(np.std(profit)),
-        profit_p10=float(np.percentile(profit, 10)),
-        profit_p90=float(np.percentile(profit, 90)),
-        prob_loss=float(np.mean(profit < 0)),
-        prob_above_min_margin=float(np.mean(profit > buffer)),
-    )
+    return arv_samples - purchase_price - renovation_cost - transaction_cost - holding_cost
 
 
 def underwrite(

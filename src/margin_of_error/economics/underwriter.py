@@ -23,7 +23,9 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal, cast
+
+import pandas as pd
 
 from margin_of_error.config import EconomicsConfig
 from margin_of_error.economics.simulation import (
@@ -35,6 +37,7 @@ from margin_of_error.economics.simulation import (
 logger = logging.getLogger(__name__)
 
 Verdict = Literal["APPROVE", "DECLINE", "REFER"]
+UpliftMode = Literal["none", "correlational", "causal", "config"]
 
 
 class DeclineReason(StrEnum):
@@ -52,7 +55,10 @@ class UnderwriteResult:
     verdict: Verdict
     renovation_tier: str
     purchase_price: float
+    base_predicted_arv: float
     predicted_arv: float
+    uplift_mode: str
+    uplift_amount: float
     interval_low: float
     interval_high: float
     interval_width_dollars: float
@@ -148,6 +154,65 @@ def _decision_note(
     )
 
 
+def _resolve_uplift_mode(mode: UpliftMode, economics: EconomicsConfig) -> UpliftMode:
+    """Resolve config-driven uplift mode into an explicit mode."""
+    if mode != "config":
+        return mode
+    return "causal" if economics.flip.use_causal_uplifts else "correlational"
+
+
+def causal_uplift_for_tier(renovation_tier: str, economics: EconomicsConfig) -> float:
+    """Sum Phase 3 DML treatment uplifts for one renovation tier."""
+    tier_features = economics.flip.causal_tier_uplift_features
+    if renovation_tier not in tier_features:
+        raise KeyError(
+            f"No causal_tier_uplift_features entry for '{renovation_tier}'. "
+            f"Known tiers: {sorted(tier_features)}"
+        )
+    values = economics.flip.causal_renovation_uplifts
+    missing = [key for key in tier_features[renovation_tier] if values.get(key) is None]
+    if missing:
+        raise ValueError(
+            f"Causal uplift values are not populated for tier '{renovation_tier}': {missing}"
+        )
+    total = 0.0
+    for key in tier_features[renovation_tier]:
+        value = values[key]
+        if value is None:
+            raise ValueError(f"Causal uplift value is not populated for {key}")
+        total += float(value)
+    return total
+
+
+def _apply_renovation_uplift(
+    arv_point: float,
+    arv_lower: float,
+    arv_upper: float,
+    renovation_tier: str,
+    economics: EconomicsConfig,
+    uplift_mode: UpliftMode,
+) -> tuple[float, float, float, str, float]:
+    """Return ARV point/interval after applying the requested renovation uplift."""
+    mode = _resolve_uplift_mode(uplift_mode, economics)
+    if mode == "none":
+        return arv_point, arv_lower, arv_upper, mode, 0.0
+
+    tier = economics.flip.renovation_tiers[renovation_tier]
+    if mode == "correlational":
+        multiplier = 1.0 + tier.value_uplift_pct
+        adjusted_point = arv_point * multiplier
+        return (
+            adjusted_point,
+            arv_lower * multiplier,
+            arv_upper * multiplier,
+            mode,
+            adjusted_point - arv_point,
+        )
+
+    uplift = causal_uplift_for_tier(renovation_tier, economics)
+    return arv_point + uplift, arv_lower + uplift, arv_upper + uplift, mode, uplift
+
+
 def underwrite(
     arv_point: float,
     arv_lower: float,
@@ -155,6 +220,7 @@ def underwrite(
     renovation_tier: str,
     economics: EconomicsConfig,
     purchase_price: float | None = None,
+    uplift_mode: UpliftMode = "none",
     seed: int = 42,
 ) -> UnderwriteResult:
     """Underwrite one property at one renovation tier.
@@ -182,6 +248,10 @@ def underwrite(
     if renovation_tier not in tiers:
         raise KeyError(f"Unknown renovation tier '{renovation_tier}'. Known tiers: {sorted(tiers)}")
     renovation_cost = tiers[renovation_tier].cost_usd
+    base_arv = arv_point
+    arv_point, arv_lower, arv_upper, resolved_mode, uplift_amount = _apply_renovation_uplift(
+        arv_point, arv_lower, arv_upper, renovation_tier, economics, uplift_mode
+    )
 
     if purchase_price is None:
         purchase_price = maximum_allowable_offer(arv_point, renovation_cost, economics.flip)
@@ -214,7 +284,10 @@ def underwrite(
         verdict=verdict,
         renovation_tier=renovation_tier,
         purchase_price=float(purchase_price),
+        base_predicted_arv=float(base_arv),
         predicted_arv=float(arv_point),
+        uplift_mode=resolved_mode,
+        uplift_amount=float(uplift_amount),
         interval_low=float(arv_lower),
         interval_high=float(arv_upper),
         interval_width_dollars=float(interval_width),
@@ -233,6 +306,7 @@ def underwrite_best_tier(
     arv_lower: float,
     arv_upper: float,
     economics: EconomicsConfig,
+    uplift_mode: UpliftMode = "none",
     seed: int = 42,
 ) -> UnderwriteResult:
     """Underwrite a property at the renovation tier that maximizes expected profit.
@@ -241,7 +315,95 @@ def underwrite_best_tier(
     uses this to assign one verdict per home. Ties break toward the cheaper tier.
     """
     candidates = [
-        underwrite(arv_point, arv_lower, arv_upper, tier, economics, seed=seed)
+        underwrite(
+            arv_point,
+            arv_lower,
+            arv_upper,
+            tier,
+            economics,
+            uplift_mode=uplift_mode,
+            seed=seed,
+        )
         for tier in economics.flip.renovation_tiers
     ]
     return max(candidates, key=lambda r: r.expected_profit)
+
+
+def detect_verdict_flips(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return rows where correlational and causal underwriting verdicts differ."""
+    required = {"correlational_verdict", "causal_verdict"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise KeyError(f"Missing verdict comparison columns: {sorted(missing)}")
+
+    flips = frame.loc[frame["correlational_verdict"] != frame["causal_verdict"]].copy()
+    if flips.empty:
+        flips["flip_direction"] = pd.Series(dtype=str)
+        return flips
+    flips["flip_direction"] = [
+        f"correlational_{correlational}_to_causal_{causal}"
+        for correlational, causal in zip(
+            flips["correlational_verdict"].astype(str),
+            flips["causal_verdict"].astype(str),
+            strict=False,
+        )
+    ]
+    return flips
+
+
+def build_underwriting_comparison(
+    frame: pd.DataFrame,
+    economics: EconomicsConfig,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Score homes under Phase 2 correlational and Phase 3 causal uplift modes."""
+    records: list[dict[str, object]] = []
+    for offset, (_row_index, row) in enumerate(frame.reset_index(drop=True).iterrows()):
+        arv_point = float(row["predicted_arv"])
+        arv_lower = float(row["interval_low_90"])
+        arv_upper = float(row["interval_high_90"])
+        row_seed = seed + offset
+        correlational = underwrite_best_tier(
+            arv_point,
+            arv_lower,
+            arv_upper,
+            economics,
+            uplift_mode="correlational",
+            seed=row_seed,
+        )
+        causal = underwrite_best_tier(
+            arv_point,
+            arv_lower,
+            arv_upper,
+            economics,
+            uplift_mode="causal",
+            seed=row_seed,
+        )
+        records.append(
+            {
+                "Id": int(cast(Any, row["Id"])) if "Id" in row.index else offset,
+                "Neighborhood": row.get("Neighborhood", "Unknown"),
+                "base_predicted_arv": float(row["predicted_arv"]),
+                "interval_low_90": float(row["interval_low_90"]),
+                "interval_high_90": float(row["interval_high_90"]),
+                "correlational_verdict": correlational.verdict,
+                "causal_verdict": causal.verdict,
+                "correlational_tier": correlational.renovation_tier,
+                "causal_tier": causal.renovation_tier,
+                "correlational_uplift": correlational.uplift_amount,
+                "causal_uplift": causal.uplift_amount,
+                "correlational_expected_profit": correlational.expected_profit,
+                "causal_expected_profit": causal.expected_profit,
+                "expected_profit_delta": causal.expected_profit - correlational.expected_profit,
+                "correlational_prob_loss": correlational.prob_loss,
+                "causal_prob_loss": causal.prob_loss,
+                "verdict_changed": correlational.verdict != causal.verdict,
+            }
+        )
+    comparison = pd.DataFrame(records)
+    flips = detect_verdict_flips(comparison)
+    if not flips.empty:
+        comparison = comparison.merge(flips[["Id", "flip_direction"]], on="Id", how="left")
+    else:
+        comparison["flip_direction"] = pd.NA
+    return comparison

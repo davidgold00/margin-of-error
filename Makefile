@@ -1,4 +1,4 @@
-.PHONY: setup lint test data-check train backtest app all clean
+.PHONY: setup lint test data-check train uncertainty causal backtest app all clean
 
 VENV      := .venv
 PYTHON    := $(VENV)/bin/python
@@ -17,7 +17,7 @@ setup:
 	$(PIP) freeze > requirements-lock.txt
 	@echo ""
 	@echo "Setup complete. Activate with: source $(VENV)/bin/activate"
-	@echo "To install causal extras (Phase 3): pip install -e '.[causal]'"
+	@echo "Optional causal forest extras: pip install -e '.[causal]'"
 
 # ── Quality gates ────────────────────────────────────────────────────────────
 lint:
@@ -42,6 +42,9 @@ train:
 
 uncertainty:
 	PYTHONPATH=src $(PYTHON) -m margin_of_error.models.phase2
+
+causal:
+	PYTHONPATH=src $(PYTHON) -m margin_of_error.causal.dml
 
 backtest:
 	@echo "Phase 4 not yet implemented — awaiting approval."

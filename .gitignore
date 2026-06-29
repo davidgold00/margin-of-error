@@ -24,6 +24,8 @@ data/external/
 !reports/phase1_oof_residuals.csv
 !reports/phase2_calibration.csv
 !reports/phase2_test_underwriting.csv
+!reports/phase3_causal_effects.csv
+!reports/phase3_underwriting_comparison.csv
 *.parquet
 *.feather
 *.h5
@@ -79,6 +81,7 @@ reports/figures/*.pdf
 reports/figures/*.svg
 !reports/figures/01_price_error_vs_home_price.svg
 !reports/figures/02*.png
+!reports/figures/03*.png
 
 # Logs
 *.log

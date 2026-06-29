@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # econml is optional: heavy install (~500 MB, pulls PyTorch).
-# Required only for Phase 3 causal analysis. See docs/decisions.md § Causal library.
+# Reserved for future heterogeneous-treatment-effect work; Phase 3 DML is manual.
 causal = [
     "econml>=0.15",
 ]

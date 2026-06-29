@@ -59,6 +59,10 @@ class RenovationCosts(BaseModel):
     bath_addition_usd: float = Field(gt=0)
     bath_remodel_usd: float = Field(gt=0)
     basement_finish_per_sqft_usd: float = Field(gt=0)
+    treatment_costs_usd: dict[str, float] = Field(
+        default_factory=dict,
+        description="Treatment-level typical costs used by the Phase 3 decision matrix",
+    )
 
 
 class ProfitThresholds(BaseModel):
@@ -147,6 +151,18 @@ class FlipConfig(BaseModel):
     renovation_tiers: dict[str, RenovationTier] = Field(
         description="Named renovation tiers (minimal/moderate/substantial)"
     )
+    use_causal_uplifts: bool = Field(
+        default=False,
+        description="If true, configured underwriting can use Phase 3 DML uplift estimates",
+    )
+    causal_renovation_uplifts: dict[str, float | None] = Field(
+        default_factory=dict,
+        description="Phase 3 DML point estimates in dollars by treatment key",
+    )
+    causal_tier_uplift_features: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Treatment keys summed for each renovation tier in causal mode",
+    )
     underwriting: UnderwritingThresholds
 
     @model_validator(mode="after")
@@ -155,6 +171,27 @@ class FlipConfig(BaseModel):
             raise ValueError("renovation_tiers must define at least one tier")
         if self.holding_period_months_min >= self.holding_period_months_max:
             raise ValueError("holding_period_months_min must be < holding_period_months_max")
+        missing_tier_maps = set(self.renovation_tiers) - set(self.causal_tier_uplift_features)
+        if self.use_causal_uplifts and missing_tier_maps:
+            raise ValueError(
+                "use_causal_uplifts=true requires causal_tier_uplift_features for "
+                f"{sorted(missing_tier_maps)}"
+            )
+        referenced = {key for keys in self.causal_tier_uplift_features.values() for key in keys}
+        missing_uplifts = referenced - set(self.causal_renovation_uplifts)
+        if self.use_causal_uplifts and missing_uplifts:
+            raise ValueError(
+                "use_causal_uplifts=true references missing causal uplifts: "
+                f"{sorted(missing_uplifts)}"
+            )
+        null_uplifts = [
+            key for key in referenced if self.causal_renovation_uplifts.get(key) is None
+        ]
+        if self.use_causal_uplifts and null_uplifts:
+            raise ValueError(
+                "use_causal_uplifts=true requires populated DML uplift values for "
+                f"{sorted(null_uplifts)}"
+            )
         return self
 
 

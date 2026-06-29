@@ -49,6 +49,19 @@ renovation:
   bath_addition_usd: 49000            # Full bathroom addition [PLACEHOLDER]
   bath_remodel_usd: 11000             # Minor bath remodel [PLACEHOLDER]
   basement_finish_per_sqft_usd: 35    # Wide range: $25–75/sqft [PLACEHOLDER]
+  treatment_costs_usd:
+    # Phase 3 decision-matrix costs. These reuse the Phase 2 placeholder cost
+    # basis above and the existing renovation-tier budgets; they are not causal
+    # findings and should be swept in Phase 5 sensitivity.
+    KitchenQual_per_step: 27000
+    BsmtFinType1_per_step: 25000
+    HeatingQC_per_step: 8000
+    FireplaceQu_per_step: 8000
+    GarageFinish_per_step: 8000
+    ExterQual_per_step: 25000
+    FullBath_per_unit: 49000
+    HalfBath_per_unit: 11000
+    BsmtFullBath_per_unit: 49000
 
 profit:
   # Minimum net profit (after all costs) required to recommend underwriting.
@@ -123,6 +136,36 @@ flip:
       cost_usd: 60000
       value_uplift_pct: 0.18
       scope: "Structural, full kitchen/bath gut, HVAC, systems"
+
+  # Phase 3 causal uplift mode. `value_uplift_pct` above is the Phase 2
+  # correlational prior; the DML values below are populated by
+  # `python -m margin_of_error.causal.dml` and can be summed by tier.
+  use_causal_uplifts: true
+  causal_renovation_uplifts:
+    KitchenQual_per_step: 4450.30
+    BsmtFinType1_per_step: 2428.54
+    HeatingQC_per_step: 1547.93
+    FireplaceQu_per_step: 1698.60
+    GarageFinish_per_step: 3524.19
+    ExterQual_per_step: 5633.52
+    FullBath_per_unit: 2491.79
+    HalfBath_per_unit: 2480.85
+    BsmtFullBath_per_unit: 8519.86
+  causal_tier_uplift_features:
+    minimal:
+      - HeatingQC_per_step
+      - FireplaceQu_per_step
+      - GarageFinish_per_step
+    moderate:
+      - KitchenQual_per_step
+      - HalfBath_per_unit
+      - ExterQual_per_step
+    substantial:
+      - KitchenQual_per_step
+      - FullBath_per_unit
+      - BsmtFullBath_per_unit
+      - BsmtFinType1_per_step
+      - GarageFinish_per_step
 
   underwriting:
     # A flip is only underwritable when expected margin clears the model's own

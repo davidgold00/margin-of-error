@@ -2,5 +2,5 @@
 
 Submodules:
     dml — Double Machine Learning estimation of treatment effects
-          (Phase 3; requires pip install -e '.[causal]')
+          (Phase 3; implemented manually with LightGBM + statsmodels)
 """

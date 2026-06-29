@@ -37,14 +37,15 @@ with margin inside uncertainty band.]*
 
 ## 3. What Can Actually Be Renovated?
 
-*[Phase 3 causal findings: compare naive regression coefficients vs. DML estimates
-for kitchen, bath, basement. Highlight confounding from OverallQual.]*
+Phase 3 replaces correlational renovation priors with cross-fitted DML estimates.
+The largest confounding gap is exterior quality: naive OLS says only +$425 per
+step, while DML estimates +$5,634 after controlling for fixed confounders.
 
 | Feature | Naive Effect ($/unit) | Causal Effect ($/unit) | Bias |
 |---|---|---|---|
-| Kitchen quality upgrade | TBD | TBD | TBD |
-| Full bathroom addition | TBD | TBD | TBD |
-| Basement finish (per sqft) | TBD | TBD | TBD |
+| Kitchen quality upgrade | $4,146 | $4,450 | -$304 |
+| Full bathroom addition | -$445 | $2,492 | -$2,937 |
+| Basement finish step | $2,468 | $2,429 | $39 |
 
 ---
 

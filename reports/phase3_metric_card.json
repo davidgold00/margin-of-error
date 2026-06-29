@@ -1,0 +1,237 @@
+{
+  "created_at_utc": "2026-06-29T18:14:12.535859+00:00",
+  "estimator": {
+    "dollar_backtransform": "coefficient * median(SalePrice)",
+    "final_stage": "OLS on residuals with HC3 robust standard errors",
+    "folds": 5,
+    "nuisance_models": "LightGBM regressors",
+    "outcome": "log1p(SalePrice)",
+    "seed": 42,
+    "type": "manual_cross_fitted_dml"
+  },
+  "outputs": {
+    "effects_csv": "reports/phase3_causal_effects.csv",
+    "figures": [
+      "reports/figures/03a_confounding_gap.png",
+      "reports/figures/03b_renovation_decision_matrix.png",
+      "reports/figures/03c_verdict_flip_distributions.png"
+    ],
+    "underwriting_comparison_csv": "reports/phase3_underwriting_comparison.csv"
+  },
+  "phase": "3",
+  "prior_artifacts": {
+    "phase1_selected_model": "lightgbm",
+    "phase1_smearing": 1.0022810083672846,
+    "phase2_calibration_rows": 6,
+    "phase2_primary_coverage": 0.9041095890410958,
+    "phase2_underwriting_rows": 292
+  },
+  "registry": {
+    "excluded_brief_treatments": [
+      {
+        "feature": "BsmtQual",
+        "reason": "registry tag is fixed, not mutable"
+      },
+      {
+        "feature": "Fireplaces",
+        "reason": "registry tag is fixed, not mutable"
+      },
+      {
+        "feature": "GarageCars",
+        "reason": "registry tag is fixed, not mutable"
+      }
+    ],
+    "fixed_count": 54,
+    "forced_confounders": [
+      "OverallQual",
+      "OverallCond"
+    ],
+    "included_treatments": [
+      {
+        "feature": "KitchenQual",
+        "kind": "ordinal",
+        "label": "Kitchen quality",
+        "rationale": "Kitchen quality is directly changed by a kitchen renovation.",
+        "treatment_key": "KitchenQual_per_step",
+        "unit": "one ordinal quality step"
+      },
+      {
+        "feature": "BsmtFinType1",
+        "kind": "ordinal",
+        "label": "Basement finish type",
+        "rationale": "Basement finish quality is a plausible investor renovation scope.",
+        "treatment_key": "BsmtFinType1_per_step",
+        "unit": "one basement finish step"
+      },
+      {
+        "feature": "HeatingQC",
+        "kind": "ordinal",
+        "label": "Heating quality",
+        "rationale": "Heating quality can be improved through HVAC replacement or repair.",
+        "treatment_key": "HeatingQC_per_step",
+        "unit": "one ordinal quality step"
+      },
+      {
+        "feature": "FireplaceQu",
+        "kind": "ordinal",
+        "label": "Fireplace quality",
+        "rationale": "Missing fireplace quality is encoded as no fireplace before ordinal encoding.",
+        "treatment_key": "FireplaceQu_per_step",
+        "unit": "one ordinal quality step"
+      },
+      {
+        "feature": "GarageFinish",
+        "kind": "ordinal",
+        "label": "Garage finish",
+        "rationale": "Garage finish can be improved cosmetically.",
+        "treatment_key": "GarageFinish_per_step",
+        "unit": "one garage finish step"
+      },
+      {
+        "feature": "ExterQual",
+        "kind": "ordinal",
+        "label": "Exterior quality",
+        "rationale": "Exterior quality is partly renovatable and documented with a caveat.",
+        "treatment_key": "ExterQual_per_step",
+        "unit": "one ordinal quality step"
+      },
+      {
+        "feature": "FullBath",
+        "kind": "count",
+        "label": "Full bathrooms",
+        "rationale": "A full bathroom can be added or remodeled as renovation scope.",
+        "treatment_key": "FullBath_per_unit",
+        "unit": "one full bathroom"
+      },
+      {
+        "feature": "HalfBath",
+        "kind": "count",
+        "label": "Half bathrooms",
+        "rationale": "A half bathroom can be added or remodeled as renovation scope.",
+        "treatment_key": "HalfBath_per_unit",
+        "unit": "one half bathroom"
+      },
+      {
+        "feature": "BsmtFullBath",
+        "kind": "count",
+        "label": "Basement full bathrooms",
+        "rationale": "A basement full bathroom can be added during basement renovation.",
+        "treatment_key": "BsmtFullBath_per_unit",
+        "unit": "one basement full bathroom"
+      }
+    ],
+    "mutable_count": 31
+  },
+  "sensitivity_check_top_3": [
+    {
+      "DML Causal ($)": 8519.855381465255,
+      "Feature": "BsmtFullBath",
+      "Naive OLS ($)": 9581.376832045578,
+      "Sensitivity Ratio": 0.8892099257561824
+    },
+    {
+      "DML Causal ($)": 5633.524369776975,
+      "Feature": "ExterQual",
+      "Naive OLS ($)": 425.0896111055307,
+      "Sensitivity Ratio": 13.252557161126253
+    },
+    {
+      "DML Causal ($)": 4450.296636706063,
+      "Feature": "KitchenQual",
+      "Naive OLS ($)": 4145.86638725699,
+      "Sensitivity Ratio": 1.073429826485675
+    }
+  ],
+  "top_bias_features": [
+    {
+      "Bias ($)": -5208.434758671444,
+      "Bias (%)": -0.924542864607798,
+      "DML CI High ($)": 9203.997000445064,
+      "DML CI Low ($)": 2063.051739108885,
+      "DML Causal ($)": 5633.524369776975,
+      "DML SE ($)": 1821.6697095245356,
+      "Feature": "ExterQual",
+      "Naive OLS ($)": 425.0896111055307,
+      "P Value": 0.0019847427172095273,
+      "Practical Interpretation": "Exterior quality: naive analysis suggests 425 dollars per one ordinal quality step; DML estimates 5,634. The naive estimate understates by about 5,208; statistically clear at 95%.",
+      "Sensitivity Ratio": 13.252557161126253,
+      "Statistically Significant?": true,
+      "Treatment Cost ($)": 25000.0,
+      "Treatment Key": "ExterQual_per_step",
+      "Unit": "one ordinal quality step"
+    },
+    {
+      "Bias ($)": -2937.216437072279,
+      "Bias (%)": -1.178755683706469,
+      "DML CI High ($)": 7148.307079321322,
+      "DML CI Low ($)": -2164.718914831593,
+      "DML Causal ($)": 2491.7940822448645,
+      "DML SE ($)": 2375.771937283907,
+      "Feature": "FullBath",
+      "Naive OLS ($)": -445.42235482741455,
+      "P Value": 0.2942538095265337,
+      "Practical Interpretation": "Full bathrooms: naive analysis suggests -445 dollars per one full bathroom; DML estimates 2,492. The naive estimate understates by about 2,937; statistically inconclusive at 95%.",
+      "Sensitivity Ratio": -5.594227714974806,
+      "Statistically Significant?": false,
+      "Treatment Cost ($)": 49000.0,
+      "Treatment Key": "FullBath_per_unit",
+      "Unit": "one full bathroom"
+    },
+    {
+      "Bias ($)": 1756.9362653169078,
+      "Bias (%)": 0.7081992890750687,
+      "DML CI High ($)": 5645.192244348257,
+      "DML CI Low ($)": -683.4920776860644,
+      "DML Causal ($)": 2480.850083331097,
+      "DML SE ($)": 1614.4602862332454,
+      "Feature": "HalfBath",
+      "Naive OLS ($)": 4237.786348648005,
+      "P Value": 0.12438060689706412,
+      "Practical Interpretation": "Half bathrooms: naive analysis suggests 4,238 dollars per one half bathroom; DML estimates 2,481. The naive estimate overstates by about 1,757; statistically inconclusive at 95%.",
+      "Sensitivity Ratio": 0.5854117879544756,
+      "Statistically Significant?": false,
+      "Treatment Cost ($)": 11000.0,
+      "Treatment Key": "HalfBath_per_unit",
+      "Unit": "one half bathroom"
+    },
+    {
+      "Bias ($)": 1061.5214505803233,
+      "Bias (%)": 0.12459383440822695,
+      "DML CI High ($)": 11322.663951100842,
+      "DML CI Low ($)": 5717.04681182967,
+      "DML Causal ($)": 8519.855381465255,
+      "DML SE ($)": 1430.0043722630535,
+      "Feature": "BsmtFullBath",
+      "Naive OLS ($)": 9581.376832045578,
+      "P Value": 2.554644339620285e-09,
+      "Practical Interpretation": "Basement full bathrooms: naive analysis suggests 9,581 dollars per one basement full bathroom; DML estimates 8,520. The naive estimate overstates by about 1,062; statistically clear at 95%.",
+      "Sensitivity Ratio": 0.8892099257561824,
+      "Statistically Significant?": true,
+      "Treatment Cost ($)": 49000.0,
+      "Treatment Key": "BsmtFullBath_per_unit",
+      "Unit": "one basement full bathroom"
+    },
+    {
+      "Bias ($)": -883.4814296855316,
+      "Bias (%)": -0.25069031114278195,
+      "DML CI High ($)": 5429.052373787486,
+      "DML CI Low ($)": 1619.3367375279515,
+      "DML Causal ($)": 3524.1945556577184,
+      "DML SE ($)": 971.8662337396772,
+      "Feature": "GarageFinish",
+      "Naive OLS ($)": 2640.713125972187,
+      "P Value": 0.0002876074767127687,
+      "Practical Interpretation": "Garage finish: naive analysis suggests 2,641 dollars per one garage finish step; DML estimates 3,524. The naive estimate understates by about 883; statistically clear at 95%.",
+      "Sensitivity Ratio": 1.3345616837346825,
+      "Statistically Significant?": true,
+      "Treatment Cost ($)": 8000.0,
+      "Treatment Key": "GarageFinish_per_step",
+      "Unit": "one garage finish step"
+    }
+  ],
+  "underwriting_comparison": {
+    "flip_direction_counts": {},
+    "representative_homes": 10,
+    "verdict_flips": 0
+  }
+}
