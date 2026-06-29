@@ -63,3 +63,73 @@ profit:
   # Rationale: $20k net profit is roughly the minimum that compensates for opportunity cost.
   # Source: stated assumption.
   min_absolute_usd: 20000   # PLACEHOLDER
+
+# ============================================================
+# Phase 2 fix-and-flip economics (profit Monte Carlo + decision rule)
+# Self-contained: every number the Phase 2 simulation/underwriter needs lives
+# here. See docs/assumptions.md for the documented basis of each value.
+# ============================================================
+flip:
+  # Acquisition price model for the dataset-wide pass: the standard flip
+  # "70% rule" — Maximum Allowable Offer = factor * ARV - renovation cost.
+  # This sets a purchase price that targets ~30% of ARV as gross margin before
+  # transaction/holding costs. The investor buys below the model's predicted
+  # value; whether the model's UNCERTAINTY still fits inside that margin is the
+  # whole question of Phase 2. See docs/decisions.md § ADR-012.
+  acquisition_arv_factor: 0.70   # PLACEHOLDER — industry "70% rule"
+
+  # Round-trip transaction cost as a fraction of PURCHASE PRICE.
+  # Rationale: ~6% covers selling agent commission + transfer taxes + closing.
+  # Industry estimate (iBuyer disclosures, NAR). Applied per the Phase 2 brief's
+  # profit formula. Flagged for Phase 5 sensitivity.
+  transaction_cost_pct: 0.06     # PLACEHOLDER — industry estimate
+
+  # Monthly carry cost as a fraction of purchase price.
+  # Components: property tax + hazard insurance + utilities + maintenance + opportunity.
+  # Rationale: ~0.8%/month. Cash deal (financing_assumption: cash) so no debt carry.
+  holding_cost_monthly_pct: 0.008  # PLACEHOLDER
+
+  # Holding period is modeled as a TRUNCATED NORMAL, not a point value: flips
+  # rarely close exactly on schedule. base/std define the distribution; min/max truncate.
+  holding_period_months_base: 4    # expected hold (assumption; range ~2–8 months)
+  holding_period_months_std: 1.5   # dispersion of hold duration
+  holding_period_months_min: 1     # truncation floor
+  holding_period_months_max: 12    # truncation cap
+
+  # Capital structure. cash = no leverage (cleanest for a portfolio project).
+  # Leverage would amplify both return and downside risk; modeled as a Phase 5 case.
+  financing_assumption: cash
+
+  # Monte Carlo draws per property per renovation tier (summary stats stored, not draws).
+  monte_carlo_samples: 10000
+
+  # Converts a 90% CQR interval half-width to a working Normal std for ARV sampling:
+  #   std = (U - L) / (2 * arv_normal_z).  1.645 = z_{0.95}. Acknowledged simplification.
+  arv_normal_z: 1.645
+
+  # Renovation tiers: cost to execute and assumed ARV uplift (conservative PRIORS).
+  # Basis: HomeAdvisor / Remodeling Magazine ranges (national). Phase 3 replaces the
+  # uplift priors with data-derived causal estimates — these are NOT findings.
+  renovation_tiers:
+    minimal:
+      cost_usd: 8000
+      value_uplift_pct: 0.04
+      scope: "Cosmetic — paint, fixtures, landscaping, minor repairs"
+    moderate:
+      cost_usd: 25000
+      value_uplift_pct: 0.10
+      scope: "Kitchen/bath refresh, flooring, lighting"
+    substantial:
+      cost_usd: 60000
+      value_uplift_pct: 0.18
+      scope: "Structural, full kitchen/bath gut, HVAC, systems"
+
+  underwriting:
+    # A flip is only underwritable when expected margin clears the model's own
+    # uncertainty by a meaningful buffer. See docs/decisions.md § ADR-013.
+    minimum_underwrite_margin_buffer_usd: 15000  # profit floor for P(profit > buffer)
+    max_acceptable_interval_width_usd: 60000     # if the model is this unsure, DECLINE
+    approve_prob_above_min_margin: 0.65          # APPROVE needs >=65% chance of clearing buffer
+    approve_prob_loss_max: 0.20                  # ...and <=20% chance of a loss
+    refer_prob_above_min_margin: 0.50            # REFER needs >=50% chance of clearing buffer
+    refer_prob_loss_max: 0.30                    # ...and <=30% chance of a loss

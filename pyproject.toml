@@ -73,3 +73,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=src/margin_of_error --cov-report=term-missing -v"
+markers = [
+    "slow: end-to-end tests that fit CQR models on real data (deselect with -m 'not slow')",
+]

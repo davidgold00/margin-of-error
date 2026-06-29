@@ -54,6 +54,64 @@ investment decision.
 
 ---
 
+## Phase 2 Fix-and-Flip Economics (`config/economics.yaml` → `flip`)
+
+The `flip` block is the self-contained parameter set for the Phase 2 profit Monte
+Carlo and underwriting rule. It is intentionally separate from the legacy
+`transaction` / `holding` / `financing` blocks (which Phase 1 documented) so Phase 2
+has one coherent, reviewable source of truth. See ADR-012/013/014 in decisions.md.
+
+### Acquisition and costs
+
+| Parameter | Value | Rationale | Source | Sensitivity |
+|---|---|---|---|---|
+| `acquisition_arv_factor` | 0.70 | Industry "70% rule": Maximum Allowable Offer = 0.70 × ARV − renovation cost. Establishes a ~30% gross margin so a profitable baseline exists and the binding question is whether model *uncertainty* fits inside it. | Industry standard | **High** — the result's sensitivity to this is the key open assumption (ADR-012) |
+| `transaction_cost_pct` | 6% of purchase price | Selling commission + transfer taxes + closing, applied per the Phase 2 brief's profit formula. | Industry estimate (iBuyer disclosures, NAR) | Medium |
+| `holding_cost_monthly_pct` | 0.8% / month | Property tax + insurance + utilities + maintenance + opportunity. Cash deal, so no debt carry. | Stated estimate | Medium |
+| `financing_assumption` | cash | Cleanest capital structure for a portfolio project. Leverage would amplify both return and downside; modeled as a Phase 5 case. | Design choice | — |
+
+### Holding period (modeled as a distribution, not a point)
+
+| Parameter | Value | Rationale | Sensitivity |
+|---|---|---|---|
+| `holding_period_months_base` | 4 | Expected hold from acquisition to resale close. | High |
+| `holding_period_months_std` | 1.5 | Flips rarely close on schedule; the carry cost has real variance. | Medium |
+| `holding_period_months_min` / `max` | 1 / 12 | Truncation bounds for the Normal. | Low |
+
+> **Note on the legacy `holding` block:** Phase 1's `holding.typical_hold_months`
+> was 6 (a deterministic point). Phase 2 instead models hold time as a truncated
+> Normal centered at 4 with a tail extending past 6 — a more honest treatment for
+> an uncertainty-focused phase. The legacy block is retained for Phase 1
+> reproducibility; Phase 2 uses only the `flip` block. **Flagged for review.**
+
+### Renovation tiers (cost + uplift PRIORS)
+
+| Tier | `cost_usd` | `value_uplift_pct` | Scope | Source |
+|---|---|---|---|---|
+| minimal | $8,000 | 4% | Cosmetic — paint, fixtures, landscaping, minor repairs | HomeAdvisor / Remodeling Mag ranges — **PRIOR, not a finding** |
+| moderate | $25,000 | 10% | Kitchen/bath refresh, flooring, lighting | same |
+| substantial | $60,000 | 18% | Structural, full kitchen/bath gut, HVAC, systems | same |
+
+> The `value_uplift_pct` figures are **conservative priors**, explicitly *not*
+> findings. **Phase 3 (causal/DML) replaces them with data-derived treatment
+> effects.** In the dataset-wide pass the verdict is dominated by the value interval
+> and the 70%-rule margin, not the uplift; the uplift priors matter most for the
+> Phase 5 what-if app.
+
+### Underwriting thresholds (`flip.underwriting`)
+
+| Parameter | Value | Rationale | Sensitivity |
+|---|---|---|---|
+| `minimum_underwrite_margin_buffer_usd` | $15,000 | Profit floor below which a months-long illiquid bet is not worth it; P(profit > buffer) drives APPROVE/REFER. | High |
+| `max_acceptable_interval_width_usd` | $60,000 | If the 90% CQR interval is wider than this, DECLINE on uncertainty regardless of the point estimate (the anti-Zillow guardrail). | **High** — near the empirical median width, so it is the dominant gate |
+| `approve_prob_above_min_margin` | 0.65 | "More likely than not, with room to spare" before committing capital. | High |
+| `approve_prob_loss_max` | 0.20 | A flipper cannot survive losing on one in four deals. | High |
+| `refer_prob_above_min_margin` / `refer_prob_loss_max` | 0.50 / 0.30 | Borderline band routed to a human. | Medium |
+| `monte_carlo_samples` | 10,000 | Draws per property per tier; summary stats stored only. | Low |
+| `arv_normal_z` | 1.645 | z₀.₉₅, maps a 90% interval half-width to a working Normal std for ARV sampling. | Low |
+
+---
+
 ## Modeling Assumptions (`config/model.yaml`)
 
 ### Target Variable

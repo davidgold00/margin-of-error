@@ -1,0 +1,104 @@
+{
+  "cqr": {
+    "calibration_curve": [
+      {
+        "empirical_coverage": 0.5342465753424658,
+        "median_width_dollars": 20331.20290970456,
+        "nominal_coverage": 0.5
+      },
+      {
+        "empirical_coverage": 0.565068493150685,
+        "median_width_dollars": 23269.77295528078,
+        "nominal_coverage": 0.6
+      },
+      {
+        "empirical_coverage": 0.7054794520547946,
+        "median_width_dollars": 29258.190778991142,
+        "nominal_coverage": 0.7
+      },
+      {
+        "empirical_coverage": 0.815068493150685,
+        "median_width_dollars": 45084.707412588104,
+        "nominal_coverage": 0.8
+      },
+      {
+        "empirical_coverage": 0.9041095890410958,
+        "median_width_dollars": 64025.24034697585,
+        "nominal_coverage": 0.9
+      },
+      {
+        "empirical_coverage": 0.9315068493150684,
+        "median_width_dollars": 85060.09813571407,
+        "nominal_coverage": 0.95
+      }
+    ],
+    "primary_empirical_coverage": 0.9041095890410958,
+    "primary_nominal_coverage": 0.9,
+    "primary_q_hat_log": 0.06659941425962401,
+    "secondary_empirical_coverage": 0.815068493150685,
+    "secondary_nominal_coverage": 0.8
+  },
+  "created_at_utc": "2026-06-28T06:43:45.679806+00:00",
+  "economics_config_snapshot": {
+    "acquisition_arv_factor": 0.7,
+    "arv_normal_z": 1.645,
+    "financing_assumption": "cash",
+    "holding_cost_monthly_pct": 0.008,
+    "holding_period_months_base": 4.0,
+    "holding_period_months_max": 12.0,
+    "holding_period_months_min": 1.0,
+    "holding_period_months_std": 1.5,
+    "monte_carlo_samples": 10000,
+    "renovation_tiers": {
+      "minimal": {
+        "cost_usd": 8000.0,
+        "scope": "Cosmetic \u2014 paint, fixtures, landscaping, minor repairs",
+        "value_uplift_pct": 0.04
+      },
+      "moderate": {
+        "cost_usd": 25000.0,
+        "scope": "Kitchen/bath refresh, flooring, lighting",
+        "value_uplift_pct": 0.1
+      },
+      "substantial": {
+        "cost_usd": 60000.0,
+        "scope": "Structural, full kitchen/bath gut, HVAC, systems",
+        "value_uplift_pct": 0.18
+      }
+    },
+    "transaction_cost_pct": 0.06,
+    "underwriting": {
+      "approve_prob_above_min_margin": 0.65,
+      "approve_prob_loss_max": 0.2,
+      "max_acceptable_interval_width_usd": 60000.0,
+      "minimum_underwrite_margin_buffer_usd": 15000.0,
+      "refer_prob_above_min_margin": 0.5,
+      "refer_prob_loss_max": 0.3
+    }
+  },
+  "headline": {
+    "approve_count": 127,
+    "approve_rate": 0.4349315068493151,
+    "decline_count": 164,
+    "decline_rate": 0.5616438356164384,
+    "decline_reason_counts": {
+      "Model uncertainty exceeds the acceptable interval width": 164
+    },
+    "mean_interval_width_90_dollars": 83622.50444887028,
+    "median_interval_width_90_dollars": 64025.24034697585,
+    "n_test_homes": 292,
+    "refer_count": 1,
+    "refer_rate": 0.003424657534246575,
+    "top_50_naive_picks_declined": 50,
+    "top_50_naive_picks_declined_frac": 1.0,
+    "top_50_naive_picks_not_approved": 50,
+    "top_50_naive_picks_not_approved_frac": 1.0
+  },
+  "phase": "2",
+  "phase1_typical_error_dollars": 9412.517062157705,
+  "splits": {
+    "calibration": 219,
+    "test": 292,
+    "train": 949
+  }
+}

@@ -168,3 +168,114 @@ stratum has at least five rows.
 **Tradeoff:** Rare neighborhoods lose individual fold-stratification identity,
 but the alternative is fully random folds. This is still not spatial CV; Phase 4
 handles temporal robustness and spatial CV remains backlog.
+
+---
+
+## Phase 2 Decisions
+
+### ADR-010: Three-way split (65 / 15 / 20) instead of the Phase 0 single hold-out
+
+**Context:** ADR-004 planned an 85/15 train/calibration split. But CQR coverage
+must be *measured* on data touched by neither the quantile models nor the
+conformal calibration. With only train+calibration, there is no honest test set.
+
+**Decision:** Split the 1,460 labeled Kaggle rows three ways with no overlap:
+train 65% (≈949, fits the quantile arms), calibration 15% (≈219, computes Q̂),
+test 20% (≈292, measures coverage and width). Sizes live in `config.conformal`
+(`calibration_split`, `test_split`); the split is seeded by `global_seed`.
+
+**Tradeoff:** The CQR quantile models see fewer rows than Phase 1's 85%. That is
+the correct price for an honest, untouched test set — coverage measured on the
+training or calibration folds would be optimistic. The CQR quantile models are
+separate estimators from the Phase 1 point model; they do not need identical
+training rows, only clean splits. The feature pipeline is **refit on the CQR
+training fold** (not inherited from the Phase 1 artifact) so no cross-split
+information leaks.
+
+---
+
+### ADR-011: CQR implemented directly, not via MAPIE; the conformal-rank bug
+
+**Context:** ADR-002 planned MAPIE as the production path with a custom CQR as a
+cross-check. In implementation, the split-conformal CQR math is ~5 lines and is
+more auditable written out than wrapped.
+
+**Decision:** Implement CQR directly in `models/conformal.py`. The quantile arms
+are LightGBM (`objective="quantile"`) reusing the Phase 1 feature pipeline and
+hyperparameters; the conformal correction is the Romano et al. (2019) rank.
+MAPIE remains an optional future cross-check, not a dependency of the result.
+
+**The bug the calibration gate caught:** the scaffolded `compute_conformal_quantile`
+computed `level = ceil((1-alpha)(1 + 1/n)) / n`, which applies `ceil(.)` to a
+fraction ≈0.9 → 1, collapsing the level to `1/n`. That produced a hugely negative
+Q̂, inverted intervals (negative widths) and ~3% empirical coverage. The
+non-negotiable coverage assertion stopped the run before any economics. Fixed to
+the correct rank `k = ceil((1-alpha)(n+1))`, the k-th smallest score; empirical
+coverage on the test set is now 90.4% at the 90% level and tracks the diagonal at
+every level (see `reports/figures/02d_calibration.png`). This is exactly why the
+calibration gate exists.
+
+**Back-transformation:** all interval arithmetic is in log space; each bound is
+back-transformed with `expm1` **separately**. The Duan smearing factor is applied
+**only** to the point estimate (a mean correction); the bounds are quantiles, which
+are median-unbiased and receive no smearing.
+
+---
+
+### ADR-012: Acquisition price uses the industry "70% rule" (MAO)
+
+**Context:** The dataset-wide pass needs a purchase price per home. Buying at the
+model's predicted value makes every flip a guaranteed loss (Ames home values vs.
+the renovation-uplift priors), which would make the decision rule decline homes
+for the *wrong* reason (upside-down economics, not uncertainty).
+
+**Decision:** Acquire under the standard flip "70% rule" — Maximum Allowable Offer
+= `acquisition_arv_factor × ARV − renovation_cost` (factor 0.70 in config). This
+targets ~30% of ARV as gross margin before costs, so a genuinely profitable
+baseline exists and the binding question becomes whether the model's *uncertainty*
+fits inside that margin.
+
+**Tradeoff / open assumption for review:** the 70% rule already embeds a margin of
+safety. Under it, the probabilistic margin/loss checks rarely bind — the verdict is
+driven mainly by the `max_acceptable_interval_width_usd` cap. That is a defensible
+finding ("even with the industry 30% safety margin, model uncertainty alone
+disqualifies the majority of homes"), but it makes REFER rare. Alternatives
+(a fixed discount to value; a tighter buffer) are logged for Phase 5 sensitivity.
+
+---
+
+### ADR-013: The APPROVE / REFER / DECLINE thresholds, and the width override
+
+**Context:** The verdict needs to encode "expected margin must clear the model's
+own uncertainty by a buffer." The brief specifies probability thresholds.
+
+**Decision (all in `config.flip.underwriting`):** APPROVE requires
+P(profit > \$15K buffer) ≥ 0.65 **and** P(loss) ≤ 0.20 **and** interval width ≤ \$60K.
+REFER relaxes to ≥ 0.50 / ≤ 0.30. Otherwise DECLINE, reporting the binding reason.
+Crucially, an interval **wider than the \$60K cap is a hard DECLINE that overrides
+REFER** — a deliberate strengthening of the brief's REFER rule, because a model that
+cannot value a home within \$60K should not have capital bet on it regardless of the
+point estimate. This is the explicit anti-Zillow guardrail and is what the named
+test `test_wide_interval_declines_despite_positive_point_estimate` locks in.
+
+**Why these numbers:** they are defensible starting points, not sacred — 65% is a
+"more likely than not, with room to spare" bar for committing months-long illiquid
+capital; 20% loss tolerance reflects that a flipper cannot survive losing on one in
+four deals. All six are config-driven and swept in Phase 5.
+
+---
+
+### ADR-014: Profit Monte Carlo — Normal ARV, truncated-Normal hold
+
+**Context:** The CQR interval is distribution-free; the profit simulation needs a
+sampling distribution for ARV and holding period.
+
+**Decision:** Sample ARV ~ Normal(point, (U−L)/(2·1.645)) — mapping the 90% interval
+half-width to a working std — and holding period ~ truncated Normal(base=4, std=1.5,
+[1, 12]). 10,000 draws per property per tier; only summary statistics are stored
+(never the raw draws), keeping the dataset-wide pass memory-light.
+
+**Tradeoff:** Approximating a distribution-free interval with a Normal is an
+acknowledged simplification (it ignores any skew the conformal interval captures).
+It is transparent, reproducible, and conservative enough for an underwriting screen;
+a fuller treatment (sampling the empirical conformal distribution) is backlog.

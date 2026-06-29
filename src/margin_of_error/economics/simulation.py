@@ -30,13 +30,13 @@ awaiting Phase 2 approval.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import numpy as np
 
-from margin_of_error.config import EconomicsConfig
+from margin_of_error.config import EconomicsConfig, FlipConfig
 
 
 class UnderwriteDecision(StrEnum):
@@ -197,6 +197,145 @@ def simulate_profit_distribution(
         ]
     )
     return profits
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Phase 2 profit Monte Carlo (the engine the underwriter consumes)
+#
+# Profit model (per the Phase 2 brief), all in nominal dollars:
+#     net_profit = ARV
+#                - purchase_price
+#                - renovation_cost
+#                - purchase_price * transaction_cost_pct
+#                - purchase_price * holding_cost_monthly_pct * holding_period_months
+#
+# ARV is sampled from the CQR interval as ~Normal(mean=arv_point, std=(U-L)/(2z)).
+# holding_period_months is sampled from a truncated Normal. purchase_price is set
+# by the "70% rule" Maximum Allowable Offer. See docs/decisions.md § ADR-012.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ProfitSummary:
+    """Summary statistics of a per-property profit distribution.
+
+    Only summary stats are stored (never the 10,000 raw draws), so the
+    dataset-wide pass stays memory-light.
+    """
+
+    purchase_price: float
+    renovation_cost: float
+    mean_profit: float
+    std_profit: float
+    profit_p10: float
+    profit_p90: float
+    prob_loss: float
+    prob_above_min_margin: float
+
+    def to_dict(self) -> dict[str, float]:
+        """JSON/serialization-friendly mapping of the summary."""
+        return asdict(self)
+
+
+def maximum_allowable_offer(arv_point: float, renovation_cost: float, flip: FlipConfig) -> float:
+    """Purchase price under the flip '70% rule': factor*ARV - renovation cost.
+
+    Returns a non-negative offer (clamped at 0 for homes where renovation cost
+    alone exceeds the allowable basis).
+    """
+    return max(flip.acquisition_arv_factor * arv_point - renovation_cost, 0.0)
+
+
+def arv_std_from_interval(arv_lower: float, arv_upper: float, flip: FlipConfig) -> float:
+    """Map a (U - L) interval width to a working Normal std for ARV sampling.
+
+    std = (U - L) / (2 * arv_normal_z). Acknowledged simplification: the CQR
+    interval is distribution-free, but a Normal is a convenient sampling proxy.
+    """
+    return max((arv_upper - arv_lower) / (2.0 * flip.arv_normal_z), 0.0)
+
+
+def _sample_truncated_normal(
+    rng: np.random.Generator,
+    mean: float,
+    std: float,
+    low: float,
+    high: float,
+    size: int,
+) -> np.ndarray:
+    """Sample a truncated Normal by resampling out-of-bounds draws.
+
+    With the configured holding-period parameters the truncation mass is small,
+    so a bounded resampling loop converges in a couple of passes.
+    """
+    if std <= 0:
+        return cast(np.ndarray, np.clip(np.full(size, mean), low, high))
+    out = rng.normal(mean, std, size=size)
+    for _ in range(64):
+        bad = (out < low) | (out > high)
+        n_bad = int(np.count_nonzero(bad))
+        if n_bad == 0:
+            break
+        out[bad] = rng.normal(mean, std, size=n_bad)
+    return cast(np.ndarray, np.clip(out, low, high))
+
+
+def simulate_flip_profit(
+    arv_point: float,
+    arv_lower: float,
+    arv_upper: float,
+    renovation_cost: float,
+    economics: EconomicsConfig,
+    purchase_price: float | None = None,
+    seed: int = 42,
+) -> ProfitSummary:
+    """Monte Carlo profit distribution for one property at one renovation tier.
+
+    Args:
+        arv_point: Point estimate of after-repair value (dollars).
+        arv_lower: Lower bound of the 90% CQR interval (dollars).
+        arv_upper: Upper bound of the 90% CQR interval (dollars).
+        renovation_cost: Renovation budget for the chosen tier (dollars).
+        economics: Loaded EconomicsConfig (uses the ``flip`` block).
+        purchase_price: Explicit acquisition price. If None, the '70% rule'
+            Maximum Allowable Offer is used.
+        seed: RNG seed for reproducibility.
+
+    Returns:
+        ProfitSummary with mean/std/p10/p90/P(loss)/P(profit > buffer).
+    """
+    flip = economics.flip
+    n = flip.monte_carlo_samples
+    buffer = flip.underwriting.minimum_underwrite_margin_buffer_usd
+    if purchase_price is None:
+        purchase_price = maximum_allowable_offer(arv_point, renovation_cost, flip)
+
+    rng = np.random.default_rng(seed)
+    arv_std = arv_std_from_interval(arv_lower, arv_upper, flip)
+    arv_samples = rng.normal(arv_point, arv_std, size=n) if arv_std > 0 else np.full(n, arv_point)
+    hold_samples = _sample_truncated_normal(
+        rng,
+        flip.holding_period_months_base,
+        flip.holding_period_months_std,
+        flip.holding_period_months_min,
+        flip.holding_period_months_max,
+        size=n,
+    )
+
+    transaction_cost = purchase_price * flip.transaction_cost_pct
+    holding_cost = purchase_price * flip.holding_cost_monthly_pct * hold_samples
+    profit = arv_samples - purchase_price - renovation_cost - transaction_cost - holding_cost
+
+    return ProfitSummary(
+        purchase_price=float(purchase_price),
+        renovation_cost=float(renovation_cost),
+        mean_profit=float(np.mean(profit)),
+        std_profit=float(np.std(profit)),
+        profit_p10=float(np.percentile(profit, 10)),
+        profit_p90=float(np.percentile(profit, 90)),
+        prob_loss=float(np.mean(profit < 0)),
+        prob_above_min_margin=float(np.mean(profit > buffer)),
+    )
 
 
 def underwrite(

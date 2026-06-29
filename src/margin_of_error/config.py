@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -70,6 +70,94 @@ class ProfitThresholds(BaseModel):
     min_absolute_usd: float = Field(gt=0, description="Minimum net profit in dollars (floor)")
 
 
+class RenovationTier(BaseModel):
+    """A single renovation tier: cost to execute and assumed ARV uplift.
+
+    The uplift percentages are conservative PRIORS for Phase 2. Phase 3 (causal)
+    replaces them with data-derived estimates — they are assumptions, not findings.
+    """
+
+    cost_usd: float = Field(gt=0, description="Total renovation budget for this tier")
+    value_uplift_pct: float = Field(
+        ge=0, lt=1, description="Assumed ARV uplift as a fraction of base value"
+    )
+    scope: str = Field(description="Human-readable scope of work for this tier")
+
+
+class UnderwritingThresholds(BaseModel):
+    """Decision thresholds for the Phase 2 underwriting rule.
+
+    All thresholds are defensible starting points, documented in docs/decisions.md
+    and intended to be swept in the Phase 5 sensitivity analysis.
+    """
+
+    minimum_underwrite_margin_buffer_usd: float = Field(
+        gt=0, description="Profit floor; P(profit > this) drives APPROVE/REFER"
+    )
+    max_acceptable_interval_width_usd: float = Field(
+        gt=0, description="If the 90% CQR interval is wider than this, DECLINE on uncertainty"
+    )
+    approve_prob_above_min_margin: float = Field(
+        gt=0, le=1, description="Min P(profit > buffer) required to APPROVE"
+    )
+    approve_prob_loss_max: float = Field(gt=0, le=1, description="Max P(loss) tolerated to APPROVE")
+    refer_prob_above_min_margin: float = Field(
+        gt=0, le=1, description="Min P(profit > buffer) required to REFER"
+    )
+    refer_prob_loss_max: float = Field(gt=0, le=1, description="Max P(loss) tolerated to REFER")
+
+    @model_validator(mode="after")
+    def approve_must_be_stricter_than_refer(self) -> UnderwritingThresholds:
+        if self.approve_prob_above_min_margin < self.refer_prob_above_min_margin:
+            raise ValueError("APPROVE margin-probability bar must be >= REFER bar")
+        if self.approve_prob_loss_max > self.refer_prob_loss_max:
+            raise ValueError("APPROVE loss tolerance must be <= REFER tolerance")
+        return self
+
+
+class FlipConfig(BaseModel):
+    """Phase 2 fix-and-flip economics: profit Monte Carlo + underwriting rule.
+
+    This block is self-contained: it carries every parameter the Phase 2 profit
+    simulation and decision rule need, so no economic constant lives in code.
+    """
+
+    acquisition_arv_factor: float = Field(
+        gt=0, le=1, description="'70% rule' factor: MAO = factor*ARV - renovation cost"
+    )
+    transaction_cost_pct: float = Field(
+        gt=0, lt=1, description="Round-trip transaction cost as a fraction of purchase price"
+    )
+    holding_cost_monthly_pct: float = Field(
+        gt=0, lt=1, description="Monthly carry cost as a fraction of purchase price"
+    )
+    holding_period_months_base: float = Field(gt=0, description="Expected hold duration (months)")
+    holding_period_months_std: float = Field(
+        gt=0, description="Std of hold duration; flips rarely go to plan"
+    )
+    holding_period_months_min: float = Field(gt=0, description="Truncation floor for hold (months)")
+    holding_period_months_max: float = Field(gt=0, description="Truncation cap for hold (months)")
+    financing_assumption: Literal["cash", "leverage"] = Field(
+        description="Capital structure; cash is the clean default for the portfolio project"
+    )
+    monte_carlo_samples: int = Field(gt=0, description="Profit MC draws per property per tier")
+    arv_normal_z: float = Field(
+        gt=0, description="z mapping a (U-L) interval half-width to a Normal std"
+    )
+    renovation_tiers: dict[str, RenovationTier] = Field(
+        description="Named renovation tiers (minimal/moderate/substantial)"
+    )
+    underwriting: UnderwritingThresholds
+
+    @model_validator(mode="after")
+    def validate_tiers_and_bounds(self) -> FlipConfig:
+        if not self.renovation_tiers:
+            raise ValueError("renovation_tiers must define at least one tier")
+        if self.holding_period_months_min >= self.holding_period_months_max:
+            raise ValueError("holding_period_months_min must be < holding_period_months_max")
+        return self
+
+
 class EconomicsConfig(BaseModel):
     """Root economics configuration; loaded from config/economics.yaml."""
 
@@ -78,6 +166,7 @@ class EconomicsConfig(BaseModel):
     financing: FinancingConfig
     renovation: RenovationCosts
     profit: ProfitThresholds
+    flip: FlipConfig
 
 
 # ── Model configuration ──────────────────────────────────────────────────────
@@ -151,7 +240,13 @@ class TargetConfig(BaseModel):
 class ConformalConfig(BaseModel):
     alpha: float = Field(gt=0, lt=1, description="Miscoverage level; intervals cover 1-alpha")
     calibration_split: float = Field(
-        gt=0, lt=0.5, description="Fraction of training set for conformal calibration"
+        gt=0, lt=0.5, description="Fraction of full labeled set for conformal calibration"
+    )
+    test_split: float = Field(
+        gt=0, lt=0.5, description="Fraction of full labeled set held out as the CQR test set"
+    )
+    secondary_alpha: float = Field(
+        gt=0, lt=1, description="Secondary miscoverage level reported alongside the primary"
     )
 
 

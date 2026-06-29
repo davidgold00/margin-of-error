@@ -53,15 +53,18 @@ target:
 
 conformal:
   # 1 - alpha = nominal coverage guarantee for prediction intervals.
-  # alpha: 0.10 → 90% intervals. We report both 80% and 90% in Phase 2.
+  # alpha: 0.10 → 90% intervals (primary). We also report 80% (secondary_alpha).
   alpha: 0.10
+  secondary_alpha: 0.20
 
-  # Fraction of training data withheld exclusively for conformal calibration.
-  # This data is never seen by the underlying model.
-  # Decision note: 15% of 1460 ≈ 219 rows; sufficient for stable empirical quantiles.
-  # A smaller split wastes calibration guarantee; a larger split wastes training data.
-  # See docs/decisions.md § Conformal calibration split.
+  # Three-way split of the 1,460 labeled rows (see docs/decisions.md § ADR-010):
+  #   train  = 1 - calibration_split - test_split  (fit the quantile models)
+  #   calib  = calibration_split                    (compute conformal correction Q̂)
+  #   test   = test_split                           (evaluate coverage + width)
+  # 0.15 of 1460 ≈ 219 calibration rows — stable empirical quantiles at α = 0.10.
+  # 0.20 of 1460 ≈ 292 test rows — never touched during fit or calibration.
   calibration_split: 0.15
+  test_split: 0.20
 
 lightgbm:
   n_estimators: 1000

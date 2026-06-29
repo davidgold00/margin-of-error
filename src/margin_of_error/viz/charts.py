@@ -47,7 +47,7 @@ def _save_or_show(fig: plt.Figure, filename: str | None) -> plt.Figure:
     if filename is not None:
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
         out = FIGURES_DIR / filename
-        fig.savefig(out, dpi=150, bbox_inches="tight")
+        fig.savefig(out, dpi=200, bbox_inches="tight")
         logger.info("Saved figure: %s", out)
     return fig
 
@@ -281,52 +281,216 @@ def write_price_error_svg(
     return out
 
 
-def plot_margin_vs_uncertainty(
-    predicted_margins: np.ndarray,
-    interval_widths: np.ndarray,
-    underwrite_mask: np.ndarray,
-    save_as: str | None = "02_margin_vs_uncertainty.png",
+# Verdict palette shared across all Phase 2 figures.
+VERDICT_COLORS: dict[str, str] = {
+    "APPROVE": "#2CA02C",  # green
+    "REFER": "#F2C744",  # yellow
+    "DECLINE": "#D62728",  # red
+}
+
+
+def plot_confrontation(
+    frame: pd.DataFrame,
+    flip_margin_low: float,
+    flip_margin_high: float,
+    save_as: str | None = "02a_confrontation.png",
 ) -> plt.Figure:
-    """Phase 2: THE signature chart — margin vs. model uncertainty.
+    """Figure 2A — The Confrontation Chart (the hero visual).
 
-    X-axis: Predicted gross profit margin (% of ARV)
-    Y-axis: CQR prediction interval width (% of predicted ARV)
-
-    Each point is a property. Color: UNDERWRITE (green) vs DECLINE (red/grey).
-
-    The diagonal line y = x marks where uncertainty = margin. Points above
-    this line have uncertainty > margin and cannot be safely underwritten.
-    The chart's central finding: many 'profitable' deals (positive x) are
-    above the line (high uncertainty) and should be declined.
+    X = actual sale price ($); Y = 90% CQR interval width ($). Each point is a
+    test home, colored by underwriting verdict. The shaded horizontal band marks
+    the plausible flip-margin range. The visual argument: most interval widths sit
+    far above the flip-margin band — the model doesn't know enough to underwrite.
 
     Args:
-        predicted_margins: Predicted profit as fraction of ARV, per property.
-        interval_widths: CQR interval width as fraction of ARV, per property.
-        underwrite_mask: Boolean array; True = UNDERWRITE decision.
-        save_as: Filename to save under reports/figures/.
-
-    Returns:
-        matplotlib Figure.
+        frame: phase2_test_underwriting DataFrame (needs actual_sale_price,
+            interval_width_90, verdict).
+        flip_margin_low / flip_margin_high: flip-margin band bounds ($).
+        save_as: filename under reports/figures/.
     """
-    raise NotImplementedError("Phase 2 not yet implemented — awaiting approval")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(9.5, 6))
+    ax.axhspan(
+        flip_margin_low,
+        flip_margin_high,
+        color="#F58518",
+        alpha=0.20,
+        label=f"Flip-margin band (${flip_margin_low:,.0f}-${flip_margin_high:,.0f})",
+    )
+    for verdict, color in VERDICT_COLORS.items():
+        sub = frame[frame["verdict"] == verdict]
+        if sub.empty:
+            continue
+        ax.scatter(
+            sub["actual_sale_price"],
+            sub["interval_width_90"],
+            s=30,
+            alpha=0.7,
+            color=color,
+            edgecolor="none",
+            label=f"{verdict} (n={len(sub)})",
+        )
+    median_width = float(frame["interval_width_90"].median())
+    ax.axhline(median_width, color="#111111", linestyle="--", linewidth=1.3)
+    ax.text(
+        ax.get_xlim()[1],
+        median_width,
+        f"  median width ${median_width:,.0f}",
+        va="center",
+        ha="left",
+        fontsize=9,
+    )
+    ax.set_title(
+        "Model Uncertainty vs. Flip Margin:\nMost 'Profitable' Homes Are Ununderwritable",
+        fontsize=13,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Actual sale price ($)")
+    ax.set_ylabel("90% prediction-interval width ($)")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
+
+
+def plot_zillow_trap(
+    frame: pd.DataFrame,
+    top_n: int = 50,
+    save_as: str | None = "02b_zillow_trap.png",
+) -> plt.Figure:
+    """Figure 2B — The Zillow Trap.
+
+    Take the top-N homes by naive point-estimate profit (what a point model would
+    call the best buys). Draw each home's profit uncertainty bar (p10–p90), a
+    marker at expected profit, colored by verdict, sorted by expected profit. Many
+    'best buys' have profit intervals straddling zero or fail the gate on width.
+
+    Args:
+        frame: phase2_test_underwriting DataFrame.
+        top_n: number of top naive picks to show.
+        save_as: filename under reports/figures/.
+    """
+    import matplotlib.pyplot as plt
+
+    top = frame.nlargest(top_n, "naive_point_profit").sort_values("expected_profit")
+    y = range(len(top))
+    fig, ax = plt.subplots(figsize=(9.5, 10))
+    for yi, (_, row) in zip(y, top.iterrows(), strict=False):
+        color = VERDICT_COLORS.get(row["verdict"], "#888888")
+        ax.plot(
+            [row["profit_p10"], row["profit_p90"]],
+            [yi, yi],
+            color=color,
+            linewidth=2.4,
+            alpha=0.85,
+        )
+        ax.scatter(row["expected_profit"], yi, color=color, s=22, zorder=3)
+    ax.axvline(0, color="#111111", linewidth=1.2, linestyle="-")
+    ax.text(0, len(top) + 0.5, " break-even", fontsize=9, color="#111111")
+
+    handles = [plt.Line2D([0], [0], color=c, lw=3, label=v) for v, c in VERDICT_COLORS.items()]
+    ax.legend(handles=handles, loc="lower right", fontsize=9, title="Verdict")
+    ax.set_title(
+        f"The Top {top_n} 'Deals': Point Estimates vs. What the Model Actually Knows",
+        fontsize=12.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Profit ($) — bar = 10th–90th percentile, dot = expected")
+    ax.set_ylabel(f"Top {top_n} homes by naive point-estimate profit")
+    ax.set_yticks([])
+    ax.grid(axis="x", alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
+
+
+def plot_approval_by_neighborhood(
+    frame: pd.DataFrame,
+    min_homes: int = 4,
+    save_as: str | None = "02c_approval_by_neighborhood.png",
+) -> plt.Figure:
+    """Figure 2C — Approval Rate by Neighborhood.
+
+    Bar chart of underwriting approval rate (% APPROVE + REFER) by neighborhood,
+    annotated with median interval width. Model uncertainty is not uniform: some
+    neighborhoods the model understands, others it doesn't.
+
+    Args:
+        frame: phase2_test_underwriting DataFrame.
+        min_homes: drop neighborhoods with fewer than this many test homes.
+        save_as: filename under reports/figures/.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    grp = frame.groupby("Neighborhood")
+    stats = grp.agg(
+        n=("verdict", "size"),
+        approve_rate=("verdict", lambda s: float(np.mean(s.isin(["APPROVE", "REFER"])))),
+        median_width=("interval_width_90", "median"),
+    )
+    stats = stats[stats["n"] >= min_homes].sort_values("approve_rate", ascending=True)
+
+    fig, ax = plt.subplots(figsize=(9.5, max(5, 0.34 * len(stats))))
+    colors = ["#2CA02C" if r >= 0.5 else "#D62728" for r in stats["approve_rate"]]
+    ax.barh(stats.index, stats["approve_rate"], color=colors, alpha=0.85)
+    for yi, (_, row) in enumerate(stats.iterrows()):
+        label = (
+            f"{row['approve_rate']:.0%}  "
+            f"(med. width ${row['median_width']:,.0f}, n={int(row['n'])})"
+        )
+        ax.text(row["approve_rate"] + 0.01, yi, label, va="center", fontsize=8)
+    ax.set_xlim(0, 1.35)
+    ax.set_title(
+        "Underwriting Approval Rate by Neighborhood\n(model certainty is not uniform)",
+        fontsize=12.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Approve + Refer rate")
+    ax.grid(axis="x", alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
 
 
 def plot_calibration(
-    coverages: pd.Series,
-    nominal_levels: list[float],
-    save_as: str | None = "02_calibration.png",
+    empirical_coverages: list[float] | np.ndarray | pd.Series,
+    nominal_levels: list[float] | np.ndarray | pd.Series,
+    save_as: str | None = "02d_calibration.png",
 ) -> plt.Figure:
-    """Phase 2: reliability diagram for interval calibration.
+    """Figure 2D — calibration reliability diagram.
+
+    Plots empirical vs. nominal coverage. Points on the diagonal mean the
+    intervals deliver exactly the coverage they promise; deviation is
+    miscalibration. Required for the scientific credibility of every downstream
+    economic number.
 
     Args:
-        coverages: Empirical coverage at each nominal level.
-        nominal_levels: List of alpha levels tested.
-        save_as: Filename to save under reports/figures/.
-
-    Returns:
-        matplotlib Figure.
+        empirical_coverages: measured coverage at each nominal level.
+        nominal_levels: the nominal coverage targets (e.g., 0.5 … 0.95).
+        save_as: filename under reports/figures/.
     """
-    raise NotImplementedError("Phase 2 not yet implemented — awaiting approval")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    nominal = np.asarray(nominal_levels, dtype=float)
+    empirical = np.asarray(empirical_coverages, dtype=float)
+
+    fig, ax = plt.subplots(figsize=(6.5, 6.5))
+    ax.plot([0, 1], [0, 1], color="#888888", linestyle="--", label="Perfect calibration")
+    ax.plot(nominal, empirical, marker="o", color="#4C78A8", linewidth=2, label="CQR (test set)")
+    for x, y in zip(nominal, empirical, strict=False):
+        ax.annotate(f"{y:.2f}", (x, y), textcoords="offset points", xytext=(6, -10), fontsize=8)
+    ax.set_xlim(0.45, 1.0)
+    ax.set_ylim(0.45, 1.0)
+    ax.set_title(
+        "CQR Calibration: Empirical vs. Nominal Coverage", fontsize=12.5, fontweight="bold"
+    )
+    ax.set_xlabel("Nominal coverage (1 − α)")
+    ax.set_ylabel("Empirical coverage (test set)")
+    ax.legend(loc="upper left")
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
 
 
 def plot_naive_vs_causal(

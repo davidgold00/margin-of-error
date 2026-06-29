@@ -98,8 +98,10 @@ Raw data is git-ignored.
 | LightGBM CV RMSE (dollars) | $28,500 ± $6,381 | 1 |
 | LightGBM median absolute dollar error | $9,413 | 1 |
 | LightGBM 80th percentile absolute dollar error | $22,193 | 1 |
-| 90% prediction interval coverage | TBD | 2 |
-| % of "good buys" with margin < uncertainty band | TBD | 2 |
+| 90% prediction interval coverage (test set) | 90.4% | 2 |
+| Median 90% interval width | $64,025 | 2 |
+| Underwriting verdicts (APPROVE / REFER / DECLINE) | 43% / 0% / 56% | 2 |
+| Top-50 naive "best buys" that fail the gate | 50 / 50 (100%) | 2 |
 | Causal effect of kitchen upgrade (CQR-adjusted) | TBD | 3 |
 | Backtest: deals underwritten in 2007 that went negative | TBD | 4 |
 
@@ -118,6 +120,41 @@ the metric card is `reports/phase1_metric_card.json`.
 of $10-20K; this model's typical dollar error is $9,413. If that error is
 comparable to or larger than that margin, point predictions cannot safely
 underwrite a flip.
+
+### Phase 2 — The Confrontation (uncertainty, economics, decision)
+
+Phase 2 proves the Phase 1 hypothesis and builds the decision infrastructure
+Zillow Offers lacked. It wraps — does **not** retrain — the Phase 1 model in three
+moves: (1) replace the point estimate with a calibrated **Conformalized Quantile
+Regression** interval; (2) layer the flip economics from `config/economics.yaml`
+into a per-property **profit distribution** via Monte Carlo; (3) apply a formal
+**APPROVE / REFER / DECLINE** rule that declines a flip whenever the model's
+uncertainty is too wide to bet on, regardless of how good the point estimate looks.
+
+Reproduce: `python -m margin_of_error.models.phase2` → writes
+`reports/phase2_metric_card.json`, `reports/phase2_test_underwriting.csv`,
+`reports/phase2_calibration.csv`, and the figures in `reports/figures/02*.png`.
+The argument is narrated in `notebooks/02_uncertainty.ipynb`.
+
+**The headline finding (292 held-out test homes):**
+
+- The CQR intervals are **honestly calibrated** — 90.4% empirical coverage at the
+  90% level, tracking the diagonal at every level (`02d_calibration.png`).
+- The model's **median 90% interval is $64,025 wide** (mean $83,623) — many times
+  any realistic $10–25K flip margin.
+- The underwriting rule **APPROVEs 43%, REFERs 0.3%, and DECLINEs 56%** of homes.
+- Of the **50 homes a naive point model ranks as the best opportunities, 100% fail
+  the gate** — every one declined because the model's interval is wider than the
+  acceptable band, not because the home is a bad investment.
+
+> **The Zillow connection:** A model with this interval width, applied to homes with
+> this margin profile, would have flagged 56% of its potential acquisitions as
+> *ununderwritable* — and 100% of the deals a naive point model called the best
+> buys — not because the homes were bad, but because the model did not know enough
+> to bet capital on them. That is the guardrail Zillow Offers did not have.
+
+The renovation **uplift** numbers (4/10/18%) are conservative *priors*, not
+findings — Phase 3 replaces them with data-derived causal estimates.
 
 ---
 

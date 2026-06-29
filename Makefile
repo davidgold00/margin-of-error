@@ -40,6 +40,9 @@ data-check:
 train:
 	PYTHONPATH=src $(PYTHON) -m margin_of_error.models.baseline
 
+uncertainty:
+	PYTHONPATH=src $(PYTHON) -m margin_of_error.models.phase2
+
 backtest:
 	@echo "Phase 4 not yet implemented — awaiting approval."
 
