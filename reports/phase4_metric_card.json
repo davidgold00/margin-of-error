@@ -1,0 +1,224 @@
+{
+  "backtest_config_snapshot": {
+    "calibration_fraction": 0.2,
+    "crash_window_years": [
+      2008,
+      2010
+    ],
+    "eval_start_year": 2007,
+    "retrain_frequency": "annual",
+    "warmup_min_train_rows": 400
+  },
+  "coverage": {
+    "coverage_collapsed": true,
+    "crash_empirical": 0.8950962135319678,
+    "nominal": 0.9,
+    "overall_empirical": 0.8967462039045553,
+    "pre_crash_empirical": 0.9005763688760807
+  },
+  "crash_window_years": [
+    2008,
+    2010
+  ],
+  "created_at_utc": "2026-07-01T19:17:45.921084+00:00",
+  "data": {
+    "median_price_by_year": {
+      "2006": 159500.0,
+      "2007": 165125.0,
+      "2008": 161000.0,
+      "2009": 160850.0,
+      "2010": 155000.0
+    },
+    "peak_to_trough_median_pct": -0.061317183951551855,
+    "rows": 2930,
+    "source": "De Cock (2011) full Ames dataset, sorted by YrSold/MoSold",
+    "years": [
+      2006,
+      2007,
+      2008,
+      2009,
+      2010
+    ]
+  },
+  "economics_config_snapshot": {
+    "acquisition_arv_factor": 0.7,
+    "arv_normal_z": 1.645,
+    "backtest_acquisition_regimes": {
+      "conservative_flip": 0.7,
+      "ibuyer": 0.85
+    },
+    "causal_renovation_uplifts": {
+      "BsmtFinType1_per_step": 2428.54,
+      "BsmtFullBath_per_unit": 8519.86,
+      "ExterQual_per_step": 5633.52,
+      "FireplaceQu_per_step": 1698.6,
+      "FullBath_per_unit": 2491.79,
+      "GarageFinish_per_step": 3524.19,
+      "HalfBath_per_unit": 2480.85,
+      "HeatingQC_per_step": 1547.93,
+      "KitchenQual_per_step": 4450.3
+    },
+    "causal_tier_uplift_features": {
+      "minimal": [
+        "HeatingQC_per_step",
+        "FireplaceQu_per_step",
+        "GarageFinish_per_step"
+      ],
+      "moderate": [
+        "KitchenQual_per_step",
+        "HalfBath_per_unit",
+        "ExterQual_per_step"
+      ],
+      "substantial": [
+        "KitchenQual_per_step",
+        "FullBath_per_unit",
+        "BsmtFullBath_per_unit",
+        "BsmtFinType1_per_step",
+        "GarageFinish_per_step"
+      ]
+    },
+    "financing_assumption": "cash",
+    "holding_cost_monthly_pct": 0.008,
+    "holding_period_months_base": 4.0,
+    "holding_period_months_max": 12.0,
+    "holding_period_months_min": 1.0,
+    "holding_period_months_std": 1.5,
+    "monte_carlo_samples": 10000,
+    "renovation_tiers": {
+      "minimal": {
+        "cost_usd": 8000.0,
+        "scope": "Cosmetic \u2014 paint, fixtures, landscaping, minor repairs",
+        "value_uplift_pct": 0.04
+      },
+      "moderate": {
+        "cost_usd": 25000.0,
+        "scope": "Kitchen/bath refresh, flooring, lighting",
+        "value_uplift_pct": 0.1
+      },
+      "substantial": {
+        "cost_usd": 60000.0,
+        "scope": "Structural, full kitchen/bath gut, HVAC, systems",
+        "value_uplift_pct": 0.18
+      }
+    },
+    "transaction_cost_pct": 0.06,
+    "underwriting": {
+      "approve_prob_above_min_margin": 0.65,
+      "approve_prob_loss_max": 0.2,
+      "max_acceptable_interval_width_usd": 60000.0,
+      "minimum_underwrite_margin_buffer_usd": 15000.0,
+      "refer_prob_above_min_margin": 0.5,
+      "refer_prob_loss_max": 0.3
+    },
+    "use_causal_uplifts": true
+  },
+  "headline": {
+    "conservative_naive_max_drawdown": -0.0,
+    "conservative_uncertainty_max_drawdown": -0.0,
+    "coverage_collapsed": true,
+    "coverage_in_crash": 0.8950962135319678,
+    "coverage_pre_crash": 0.9005763688760807,
+    "ibuyer_drawdown_reduction": 108265.16178351961,
+    "ibuyer_naive_hit_rate": 0.7738693467336684,
+    "ibuyer_naive_max_drawdown": 129522.35821987357,
+    "ibuyer_naive_total_profit": 12649108.663738219,
+    "ibuyer_uncertainty_hit_rate": 0.8827751196172249,
+    "ibuyer_uncertainty_max_drawdown": 21257.19643635396,
+    "ibuyer_uncertainty_total_profit": 4951270.162101628,
+    "nominal_coverage": 0.9,
+    "signature_regime": "ibuyer"
+  },
+  "method": {
+    "acquisition_regimes": {
+      "conservative_flip": 0.7,
+      "ibuyer": 0.85
+    },
+    "calibration_fraction": 0.2,
+    "disciplined_rule": "interval-width cap + loss-probability cap (ADR-026)",
+    "eval_start_year": 2007,
+    "n_evaluation_periods": 43,
+    "n_model_generations": 4,
+    "nominal_coverage": 0.9,
+    "realized_pnl_basis": "observed sale price as realized ARV; synthetic acquisition; renovation excluded (ADR-024)",
+    "retrain_frequency": "annual"
+  },
+  "phase": "4",
+  "strategies": {
+    "conservative_flip": {
+      "buy_all": {
+        "crash_deals_bought": 1611.0,
+        "crash_hit_rate": 0.9739292364990689,
+        "crash_realized_profit": 68086580.6491972,
+        "final_cumulative_profit": 99340528.74160767,
+        "label": "Buy-All (no gate)",
+        "max_drawdown": -0.0,
+        "overall_hit_rate": 0.9744034707158351,
+        "profit_per_deal": 43097.84327184714,
+        "total_deals_bought": 2305.0,
+        "total_realized_profit": 99340528.74160765
+      },
+      "naive_point": {
+        "crash_deals_bought": 1595.0,
+        "crash_hit_rate": 0.9755485893416928,
+        "crash_realized_profit": 67938014.42383432,
+        "final_cumulative_profit": 99157914.89413822,
+        "label": "Naive point-estimate",
+        "max_drawdown": -0.0,
+        "overall_hit_rate": 0.9759405074365705,
+        "profit_per_deal": 43376.16574546728,
+        "total_deals_bought": 2286.0,
+        "total_realized_profit": 99157914.8941382
+      },
+      "uncertainty_aware": {
+        "crash_deals_bought": 779.0,
+        "crash_hit_rate": 0.9781771501925546,
+        "crash_realized_profit": 27059626.63094886,
+        "final_cumulative_profit": 35004049.63928328,
+        "label": "Uncertainty-aware (ours)",
+        "max_drawdown": -0.0,
+        "overall_hit_rate": 0.9831013916500994,
+        "profit_per_deal": 34795.27797145454,
+        "total_deals_bought": 1006.0,
+        "total_realized_profit": 35004049.63928327
+      }
+    },
+    "ibuyer": {
+      "buy_all": {
+        "crash_deals_bought": 1611.0,
+        "crash_hit_rate": 0.7914338919925512,
+        "crash_realized_profit": 21038238.645453714,
+        "final_cumulative_profit": 31456765.043380715,
+        "label": "Buy-All (no gate)",
+        "max_drawdown": -0.0,
+        "overall_hit_rate": 0.7982646420824295,
+        "profit_per_deal": 13647.186569796411,
+        "total_deals_bought": 2305.0,
+        "total_realized_profit": 31456765.04338073
+      },
+      "naive_point": {
+        "crash_deals_bought": 411.0,
+        "crash_hit_rate": 0.7664233576642335,
+        "crash_realized_profit": 8014535.904472992,
+        "final_cumulative_profit": 12649108.663738223,
+        "label": "Naive point-estimate",
+        "max_drawdown": 129522.35821987357,
+        "overall_hit_rate": 0.7738693467336684,
+        "profit_per_deal": 21187.78670642918,
+        "total_deals_bought": 597.0,
+        "total_realized_profit": 12649108.663738219
+      },
+      "uncertainty_aware": {
+        "crash_deals_bought": 371.0,
+        "crash_hit_rate": 0.8814016172506739,
+        "crash_realized_profit": 4364027.956610875,
+        "final_cumulative_profit": 4951270.162101627,
+        "label": "Uncertainty-aware (ours)",
+        "max_drawdown": 21257.19643635396,
+        "overall_hit_rate": 0.8827751196172249,
+        "profit_per_deal": 11845.143928472795,
+        "total_deals_bought": 418.0,
+        "total_realized_profit": 4951270.162101628
+      }
+    }
+  }
+}

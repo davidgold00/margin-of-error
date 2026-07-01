@@ -75,13 +75,19 @@ class UnderwriteResult:
         return asdict(self)
 
 
-def _decide(
+def classify_verdict(
     interval_width: float,
     prob_above_min_margin: float,
     prob_loss: float,
     economics: EconomicsConfig,
 ) -> tuple[Verdict, DeclineReason | None]:
-    """Apply the verdict logic. Excessive width is a hard DECLINE override."""
+    """Apply the APPROVE/REFER/DECLINE verdict logic to pre-computed statistics.
+
+    Public so the Phase 4 backtest can reuse the *exact* Phase 2 rule (interval-
+    width cap + probabilistic margin/loss checks) without duplicating thresholds
+    or re-deriving the economics. Excessive width is a hard DECLINE override.
+    See docs/decisions.md § ADR-013.
+    """
     uw = economics.flip.underwriting
 
     # Guardrail: if the model is too unsure about this home, decline regardless
@@ -267,7 +273,7 @@ def underwrite(
     )
 
     interval_width = arv_upper - arv_lower
-    verdict, reason = _decide(
+    verdict, reason = classify_verdict(
         interval_width, summary.prob_above_min_margin, summary.prob_loss, economics
     )
     note = _decision_note(

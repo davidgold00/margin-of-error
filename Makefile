@@ -47,7 +47,7 @@ causal:
 	PYTHONPATH=src $(PYTHON) -m margin_of_error.causal.dml
 
 backtest:
-	@echo "Phase 4 not yet implemented — awaiting approval."
+	PYTHONPATH=src $(PYTHON) -m margin_of_error.backtest.walkforward
 
 # ── Application ─────────────────────────────────────────────────────────────
 app:

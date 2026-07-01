@@ -710,19 +710,178 @@ def plot_verdict_flip_distributions(
     return _save_or_show(fig, save_as)
 
 
-def plot_backtest_equity(
-    backtest_df: pd.DataFrame,
-    save_as: str | None = "04_backtest_equity.png",
-) -> plt.Figure:
-    """Phase 4: cumulative P&L over the 2006–2010 backtest period.
+# Strategy palette shared across Phase 4 figures: red = the undisciplined/naive
+# path (the Zillow rule), green = our uncertainty-aware rule, brown = the baseline.
+STRATEGY_COLORS: dict[str, str] = {
+    "buy_all": "#9C755F",
+    "naive_point": "#D62728",
+    "uncertainty_aware": "#2CA02C",
+}
+STRATEGY_LABELS: dict[str, str] = {
+    "buy_all": "Buy-All (no gate)",
+    "naive_point": "Naive point-estimate",
+    "uncertainty_aware": "Uncertainty-aware (ours)",
+}
 
-    Overlays a recession shading (December 2007 – June 2009).
+
+def _crash_span(backtest_df: pd.DataFrame, ax: plt.Axes) -> None:
+    """Shade the contiguous crash-window periods on a period-indexed axis."""
+    crash = backtest_df.loc[backtest_df["is_crash"]]
+    if crash.empty:
+        return
+    lo = float(crash["period_index"].min()) - 0.5
+    hi = float(crash["period_index"].max()) + 0.5
+    ax.axvspan(lo, hi, color="#B0B0B0", alpha=0.22, label="Downturn window")
+
+
+def _date_ticks(backtest_df: pd.DataFrame, ax: plt.Axes, every: int = 6) -> None:
+    """Label the x-axis with YYYY-MM dates at a readable cadence."""
+    idx = backtest_df["period_index"].to_numpy()
+    labels = backtest_df["date"].to_numpy()
+    ticks = list(range(0, len(idx), every))
+    ax.set_xticks([idx[t] for t in ticks])
+    ax.set_xticklabels([labels[t] for t in ticks], rotation=45, ha="right", fontsize=8)
+
+
+def plot_coverage_drift(
+    backtest_df: pd.DataFrame,
+    nominal_coverage: float,
+    crash_window: tuple[int, int],
+    save_as: str | None = "04a_coverage_over_time.png",
+) -> plt.Figure:
+    """Figure 4A — realized interval coverage over time (the calibration collapse).
+
+    Plots per-period empirical coverage of the 90% CQR interval against the nominal
+    target. Intervals calibrated on pre-crash data silently under-cover once the
+    regime shifts: the point of Phase 4.
 
     Args:
-        backtest_df: DataFrame from backtest/walkforward.py BacktestResult.to_dataframe().
-        save_as: Filename to save under reports/figures/.
-
-    Returns:
-        matplotlib Figure.
+        backtest_df: tidy per-period frame from BacktestResult.to_dataframe().
+        nominal_coverage: the promised coverage (e.g., 0.90).
+        crash_window: inclusive (start_year, end_year) for the annotation only.
+        save_as: filename under reports/figures/.
     """
-    raise NotImplementedError("Phase 4 not yet implemented — awaiting approval")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    fig, ax = plt.subplots(figsize=(10, 5.5))
+    _crash_span(backtest_df, ax)
+
+    idx = backtest_df["period_index"].to_numpy()
+    coverage = backtest_df["empirical_coverage"].to_numpy(dtype=float)
+    ax.plot(
+        idx,
+        coverage,
+        marker="o",
+        markersize=4,
+        linewidth=1.6,
+        color="#4C78A8",
+        label="Realized coverage (per month)",
+    )
+    ax.axhline(
+        nominal_coverage,
+        color="#111111",
+        linestyle="--",
+        linewidth=1.6,
+        label=f"Nominal target ({nominal_coverage:.0%})",
+    )
+
+    pre = backtest_df.loc[~backtest_df["is_crash"]]
+    crash = backtest_df.loc[backtest_df["is_crash"]]
+    if not pre.empty and (pre["n_available"].sum() > 0):
+        pre_cov = float(np.average(pre["empirical_coverage"], weights=pre["n_available"]))
+        ax.hlines(
+            pre_cov,
+            pre["period_index"].min(),
+            pre["period_index"].max(),
+            color="#2CA02C",
+            linewidth=2.4,
+            label=f"Pre-crash avg ({pre_cov:.0%})",
+        )
+    if not crash.empty and (crash["n_available"].sum() > 0):
+        crash_cov = float(np.average(crash["empirical_coverage"], weights=crash["n_available"]))
+        ax.hlines(
+            crash_cov,
+            crash["period_index"].min(),
+            crash["period_index"].max(),
+            color="#D62728",
+            linewidth=2.4,
+            label=f"Crash-window avg ({crash_cov:.0%})",
+        )
+
+    ax.set_ylim(0, 1.02)
+    _date_ticks(backtest_df, ax)
+    ax.set_title(
+        f"Interval Coverage Drifts Below Its Promise in the {crash_window[0]}–{crash_window[1]} "
+        "Downturn",
+        fontsize=12.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Sale month")
+    ax.set_ylabel("Empirical 90% interval coverage")
+    ax.legend(loc="lower left", fontsize=8, ncol=2)
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)
+
+
+_REGIME_SUBTITLES: dict[str, str] = {
+    "ibuyer": "aggressive iBuyer pricing (buy near model value — the Zillow setup)",
+    "conservative_flip": "conservative 70%-rule pricing (fat margin absorbs the shock)",
+}
+
+
+def plot_backtest_equity(
+    backtest_df: pd.DataFrame,
+    regime: str,
+    crash_window: tuple[int, int],
+    strategy_summary: dict[str, dict[str, float]],
+    save_as: str | None = "04b_three_strategies_pnl.png",
+) -> plt.Figure:
+    """Figure 4B — cumulative P&L of the three strategies under one acquisition regime.
+
+    Three underwriting rules with identical pricing, differing only in the buy gate,
+    run month-by-month through the Ames downturn. The gap between the lines is the
+    dollar value of accounting for the model's own uncertainty. Under thin iBuyer
+    pricing the naive rule takes the drawdown the disciplined rule sidesteps.
+
+    Args:
+        backtest_df: tidy per-period frame from BacktestResult.to_dataframe().
+        regime: acquisition-regime name (column prefix, e.g. "ibuyer").
+        crash_window: inclusive (start_year, end_year) for the shaded band label.
+        strategy_summary: strategy_summary()[regime] — for max-drawdown labels.
+        save_as: filename under reports/figures/.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10.5, 6))
+    _crash_span(backtest_df, ax)
+
+    idx = backtest_df["period_index"].to_numpy()
+    for key in ("buy_all", "naive_point", "uncertainty_aware"):
+        cum = backtest_df[f"{regime}__{key}_cum_profit"].to_numpy(dtype=float)
+        dd = strategy_summary.get(key, {}).get("max_drawdown", float("nan"))
+        deals = strategy_summary.get(key, {}).get("total_deals_bought", float("nan"))
+        ax.plot(
+            idx,
+            cum,
+            linewidth=2.4,
+            color=STRATEGY_COLORS[key],
+            label=f"{STRATEGY_LABELS[key]} — {deals:.0f} deals, max DD ${dd:,.0f}",
+        )
+
+    ax.axhline(0, color="#111111", linewidth=1.0)
+    _date_ticks(backtest_df, ax)
+    subtitle = _REGIME_SUBTITLES.get(regime, f"{regime} pricing")
+    ax.set_title(
+        f"Three Strategies Through the Ames {crash_window[0]}–{crash_window[1]} Downturn\n"
+        f"({subtitle})",
+        fontsize=12.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Sale month")
+    ax.set_ylabel("Cumulative realized P&L ($)")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    return _save_or_show(fig, save_as)

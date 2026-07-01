@@ -129,6 +129,10 @@ class FlipConfig(BaseModel):
     acquisition_arv_factor: float = Field(
         gt=0, le=1, description="'70% rule' factor: MAO = factor*ARV - renovation cost"
     )
+    backtest_acquisition_regimes: dict[str, float] = Field(
+        default_factory=dict,
+        description="Phase 4 backtest acquisition regimes: name -> ARV factor in (0, 1]",
+    )
     transaction_cost_pct: float = Field(
         gt=0, lt=1, description="Round-trip transaction cost as a fraction of purchase price"
     )
@@ -171,6 +175,11 @@ class FlipConfig(BaseModel):
             raise ValueError("renovation_tiers must define at least one tier")
         if self.holding_period_months_min >= self.holding_period_months_max:
             raise ValueError("holding_period_months_min must be < holding_period_months_max")
+        for name, factor in self.backtest_acquisition_regimes.items():
+            if not (0.0 < factor <= 1.0):
+                raise ValueError(
+                    f"backtest_acquisition_regimes['{name}']={factor} must be in (0, 1]"
+                )
         missing_tier_maps = set(self.renovation_tiers) - set(self.causal_tier_uplift_features)
         if self.use_causal_uplifts and missing_tier_maps:
             raise ValueError(
@@ -314,6 +323,41 @@ class FeaturesConfig(BaseModel):
     drop: list[str] = Field(description="Columns to remove before modeling")
 
 
+class BacktestConfig(BaseModel):
+    """Phase 4 walk-forward backtest methodology (config/model.yaml ``backtest``).
+
+    Holds only walk-forward *methodology* knobs. All economic parameters are
+    reused from EconomicsConfig.flip so no economic constant lives in two places.
+    """
+
+    eval_start_year: int = Field(
+        ge=2006, le=2010, description="First sale-year to underwrite (earlier years are warm-up)"
+    )
+    retrain_frequency: Literal["annual", "monthly"] = Field(
+        description="Model refresh cadence over the expanding window"
+    )
+    calibration_fraction: float = Field(
+        gt=0, lt=0.5, description="Past-pool fraction held out to compute the conformal Q̂"
+    )
+    warmup_min_train_rows: int = Field(
+        gt=0, description="Minimum past rows required before the first prediction"
+    )
+    crash_window_years: list[int] = Field(
+        description="Inclusive [start_year, end_year] flagged as the downturn regime"
+    )
+
+    @model_validator(mode="after")
+    def validate_crash_window(self) -> BacktestConfig:
+        if len(self.crash_window_years) != 2:
+            raise ValueError("crash_window_years must be [start_year, end_year]")
+        start, end = self.crash_window_years
+        if start > end:
+            raise ValueError("crash_window_years start must be <= end")
+        if not (2006 <= start <= 2010 and 2006 <= end <= 2010):
+            raise ValueError("crash_window_years must fall within 2006–2010")
+        return self
+
+
 class ModelConfig(BaseModel):
     """Root model configuration; loaded from config/model.yaml."""
 
@@ -326,6 +370,7 @@ class ModelConfig(BaseModel):
     lightgbm: LightGBMConfig
     quantile: QuantileConfig
     features: FeaturesConfig
+    backtest: BacktestConfig
 
 
 # ── Loaders ──────────────────────────────────────────────────────────────────

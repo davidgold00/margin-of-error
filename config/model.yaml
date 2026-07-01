@@ -95,3 +95,29 @@ features:
     - SaleCondition
     - YrSold
     - MoSold
+
+# ============================================================
+# Phase 4 — walk-forward crash backtest (methodology only).
+# NOTE: every ECONOMIC parameter (70% rule, transaction/holding costs,
+# underwriting thresholds) is reused from config/economics.yaml `flip`.
+# This block only holds walk-forward *methodology* knobs. See docs/decisions.md.
+# ============================================================
+backtest:
+  # First sale-year to underwrite. Earlier years are training warm-up only, so the
+  # first model generation is trained purely on pre-eval_start_year data.
+  eval_start_year: 2007
+  # Model refresh cadence. 'annual' retrains once per calendar year on all sales
+  # strictly before that year (expanding window); 'monthly' retrains every month.
+  # Annual is the default: 4 deterministic generations, fast, and the crash spans
+  # whole years so annual granularity captures the regime shift cleanly.
+  retrain_frequency: annual
+  # Fraction of the (past-only) training pool held out to compute the conformal
+  # correction Q̂ at each retrain. The remainder fits the quantile arms.
+  calibration_fraction: 0.20
+  # Minimum number of past rows required before the first prediction is allowed.
+  # 2006 alone (~625 rows) clears this, so evaluation can start in 2007.
+  warmup_min_train_rows: 400
+  # Inclusive [start, end] sale-year range flagged as the downturn regime for
+  # coverage-collapse and drawdown reporting. Ames peaked in 2007; prices then
+  # softened through 2010 (a mild decline — the real magnitude is in the metric card).
+  crash_window_years: [2008, 2010]

@@ -60,7 +60,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.11"
+# Matches the dev interpreter (3.13). numpy's shipped stubs use the 3.12+ `type`
+# statement, which mypy refuses to parse under an older assumed version. The
+# package still supports >=3.11 at runtime (see requires-python); this only sets
+# mypy's analysis target to the version actually used to type-check.
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

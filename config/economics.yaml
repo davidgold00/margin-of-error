@@ -91,6 +91,22 @@ flip:
   # whole question of Phase 2. See docs/decisions.md § ADR-012.
   acquisition_arv_factor: 0.70   # PLACEHOLDER — industry "70% rule"
 
+  # Phase 4 backtest acquisition regimes (factor applied to predicted ARV to set the
+  # purchase price). Two regimes are compared to show WHEN uncertainty discipline pays:
+  #   conservative_flip (0.70) — the industry 70% rule; ~30% margin dwarfs a 6% market
+  #                              move, so model/regime risk is second-order (ADR-025).
+  #   ibuyer (0.85)            — an aggressive iBuyer buying near model value (the Zillow
+  #                              Offers posture). 0.85 leaves ~15% gross to cover the ~9%
+  #                              round-trip (txn + carry) plus a thin profit; at this margin
+  #                              model error and regime drift push over-valued homes
+  #                              underwater — the regime where the anti-Zillow guardrail
+  #                              earns its keep. (0.90 was too thin: it leaves ~1.7% and the
+  #                              loss-averse rule then declines every deal — see ADR-025.)
+  # See docs/decisions.md § ADR-025. These are METHODOLOGY scenarios, not new economics.
+  backtest_acquisition_regimes:
+    conservative_flip: 0.70
+    ibuyer: 0.85
+
   # Round-trip transaction cost as a fraction of PURCHASE PRICE.
   # Rationale: ~6% covers selling agent commission + transfer taxes + closing.
   # Industry estimate (iBuyer disclosures, NAR). Applied per the Phase 2 brief's

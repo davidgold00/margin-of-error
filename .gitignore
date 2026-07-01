@@ -26,6 +26,7 @@ data/external/
 !reports/phase2_test_underwriting.csv
 !reports/phase3_causal_effects.csv
 !reports/phase3_underwriting_comparison.csv
+!reports/phase4_backtest_periods.csv
 *.parquet
 *.feather
 *.h5
@@ -82,6 +83,7 @@ reports/figures/*.svg
 !reports/figures/01_price_error_vs_home_price.svg
 !reports/figures/02*.png
 !reports/figures/03*.png
+!reports/figures/04*.png
 
 # Logs
 *.log
