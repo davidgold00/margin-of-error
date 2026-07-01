@@ -1,4 +1,4 @@
-.PHONY: setup lint test data-check train uncertainty causal backtest app all clean
+.PHONY: setup lint test data-check train uncertainty causal backtest app-artifacts app all clean
 
 VENV      := .venv
 PYTHON    := $(VENV)/bin/python
@@ -30,7 +30,7 @@ format:
 	$(RUFF) check --fix src/ tests/
 
 test:
-	PYTHONPATH=src $(PYTHON) -m pytest
+	PYTHONPATH=tests/support:src $(PYTHON) -m pytest
 
 # ── Data pipeline ────────────────────────────────────────────────────────────
 data-check:
@@ -50,13 +50,15 @@ backtest:
 	PYTHONPATH=src $(PYTHON) -m margin_of_error.backtest.walkforward
 
 # ── Application ─────────────────────────────────────────────────────────────
+app-artifacts:
+	PYTHONPATH=src $(PYTHON) -m margin_of_error.app.artifacts
+
 app:
-	@echo "Phase 5 not yet implemented — awaiting approval."
-	@# $(STREAMLIT) run src/margin_of_error/app/underwriting.py
+	PYTHONPATH=src $(STREAMLIT) run src/margin_of_error/app/underwriting.py
 
 # ── Housekeeping ─────────────────────────────────────────────────────────────
 clean:
 	rm -rf .venv __pycache__ .mypy_cache .ruff_cache .pytest_cache htmlcov
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-all: setup lint test
+all: data-check train uncertainty causal backtest app-artifacts lint test

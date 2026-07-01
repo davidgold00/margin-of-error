@@ -40,8 +40,13 @@ data/external/
 /models/*
 !/models/phase1/
 !/models/phase1/baseline_lightgbm.joblib
+!/models/phase2/
+!/models/phase2/cqr_90.joblib
+!/models/phase5/
+!/models/phase5/feature_defaults.json
 *.joblib
 !models/phase1/baseline_lightgbm.joblib
+!models/phase2/cqr_90.joblib
 *.cbm
 
 # Notebooks checkpoints

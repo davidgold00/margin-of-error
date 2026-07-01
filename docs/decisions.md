@@ -395,3 +395,114 @@ sample.
 credible: Phase 2 already showed the interval-width guardrail dominates decisions,
 so Phase 3 appropriately changes renovation economics without pretending it
 overrides uncertainty.
+
+---
+
+## Phase 4 Decisions
+
+### ADR-022: Phase 4 uses the full De Cock temporal dataset
+
+**Context:** The Kaggle split is random and cannot test regime drift. The full
+De Cock Ames file has 2,930 sales from 2006-2010 with `YrSold` and `MoSold`.
+
+**Decision:** Download and convert the public JSE `AmesHousing.xls` file to
+`data/raw/ames/AmesHousing.csv`, normalize its columns, and sort by year/month.
+Every walk-forward model trains only on past sales.
+
+**Tradeoff:** Raw data remains gitignored, so a clean clone must download it before
+reproducing Phase 4. The generated metric card, periods CSV, and figures are
+committed so the story is reviewable without rerunning the full backtest.
+
+### ADR-023: Annual expanding-window retraining
+
+**Context:** Monthly retraining would be more granular but much slower and noisier
+for a small dataset. The downturn is measured at year/month resolution.
+
+**Decision:** Retrain once per sale year on all prior years. Evaluation starts in
+2007, so the first generation trains on 2006 only; later generations expand the
+training window.
+
+**Tradeoff:** Annual retraining may understate a nimble operator's adaptation, but
+it keeps the no-look-ahead invariant simple and testable.
+
+### ADR-024: Phase 4 excludes renovation uplift from realized P&L
+
+**Context:** Ames records sale transactions, not buy-renovate-resell pairs. Adding
+a renovation uplift to the observed sale price would invent the counterfactual
+resale price.
+
+**Decision:** Treat observed sale price as realized ARV and set synthetic
+acquisition prices from predicted ARV. P&L subtracts purchase price, transaction
+cost, and expected holding cost; renovation is excluded from the backtest.
+
+**Tradeoff:** The backtest is an underwriting-rule stress test, not a full flip
+project simulator. That limitation is explicit in the metric card and explainer.
+
+### ADR-025: Compare conservative flip and thin-margin iBuyer regimes
+
+**Context:** Under the industry 70% rule, Ames's 6.1% median price decline did not
+create drawdown; the margin was too padded to expose model risk.
+
+**Decision:** Report two acquisition regimes: `conservative_flip` at 70% of
+predicted ARV and `ibuyer` at 85% of predicted ARV. The iBuyer regime represents
+buying near model value with a thin margin after transaction and carry costs.
+
+**Tradeoff:** The iBuyer factor is a scenario, not a direct Zillow Offers contract
+term. Showing both regimes prevents overstating the finding: uncertainty
+discipline matters most when margins are thin.
+
+### ADR-026: Phase 4 disciplined gate uses interval width plus loss probability
+
+**Context:** The Phase 2 $15,000 profit-buffer probability is flip-specific. In a
+thin-margin iBuyer regime, requiring the same buffer would make the rule decline
+nearly every deal and hide the risk-selection question.
+
+**Decision:** For Phase 4 strategy comparison, the uncertainty-aware gate buys
+only when interval width is below the configured cap and modeled loss probability
+is within the APPROVE tolerance. The naive point gate buys when point-estimated
+profit clears the configured buffer.
+
+**Tradeoff:** This adapts the decision rule for regime comparison while preserving
+the core anti-Zillow principle: do not buy when the model is too uncertain or loss
+probability is too high.
+
+---
+
+## Phase 5 Decisions
+
+### ADR-027: Streamlit app loads saved artifacts only
+
+**Context:** The Phase 5 tool needs to be fast and reproducible. Re-training CQR
+inside a user interaction would be slow and would blur the line between analysis
+and product.
+
+**Decision:** Add `make app-artifacts`, which persists `models/phase2/cqr_90.joblib`
+and `models/phase5/feature_defaults.json`. The app loads Phase 1, Phase 2, and
+feature-default artifacts with clear errors if any are missing.
+
+**Tradeoff:** The app has one extra build step after model runs. In exchange, app
+startup is deterministic and tests can verify the real artifact path.
+
+### ADR-028: Expose a small underwriting feature set, default the rest
+
+**Context:** Ames has roughly 80 raw columns. A usable underwriting tool should
+not force a user to populate every field.
+
+**Decision:** Expose the most decision-relevant inputs: neighborhood, living area,
+overall quality, year built, baths, kitchen quality, basement area, garage spaces,
+and garage finish. All other columns use medians/modes from the training data.
+
+**Tradeoff:** The app is a screening tool rather than a full appraisal intake. The
+defaults artifact documents the hidden values so the model input is still
+auditable.
+
+### ADR-029: Test-time readline shim for the local Python 3.13 environment
+
+**Context:** In this local venv, importing the macOS `readline` extension segfaults.
+Pytest imports `readline` during capture startup before running any tests.
+
+**Decision:** Add a tiny no-op `tests/support/readline.py` and prepend
+`tests/support` to `PYTHONPATH` only in `make test`.
+
+**Tradeoff:** This is environment compatibility plumbing, not application logic.
+Normal runtime imports still use the system modules.

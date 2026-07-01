@@ -239,3 +239,74 @@ screen, not a formal bound. The top three absolute causal effects were:
   explicitly filtered in Phase 0; flagged for Phase 1 cleaning.
 - **Assumption:** Square footage columns (GrLivArea, TotalBsmtSF, etc.) are in
   square feet, as stated in data_description.txt.
+
+---
+
+## Phase 4 Backtest Assumptions
+
+### Temporal Data
+
+- **Assumption:** `data/raw/ames/AmesHousing.csv` is the full De Cock Ames dataset
+  with 2,930 sales from 2006-2010, sorted by `YrSold` and `MoSold`.
+- **Rationale:** The Kaggle split is random and cannot test time drift.
+- **Observed market move:** Ames median sale price peaked at $165,125 in 2007 and
+  reached $155,000 in 2010, a 6.1% peak-to-trough decline.
+- **Sensitivity flag:** High. A market with a larger drawdown would likely produce
+  stronger regime-shift stress.
+
+### Acquisition Regimes
+
+| Regime | ARV factor | Purpose |
+|---|---:|---|
+| `conservative_flip` | 0.70 | Industry 70% rule; tests whether a fat-margin flipper needs the uncertainty gate in a mild downturn. |
+| `ibuyer` | 0.85 | Thin-margin buyer near model value; tests the Zillow-style failure mode where model error becomes capital risk. |
+
+These are methodology scenarios. They are not claims that every investor or Zillow
+Offers used exactly these factors.
+
+### Realized P&L Basis
+
+- **Assumption:** Observed sale price is treated as realized ARV.
+- **Rationale:** Ames does not contain true buy-renovate-resell pairs, so this is
+  the observable resale value available for a stress test.
+- **Excluded:** Renovation cost and renovation uplift are excluded from Phase 4
+  realized P&L because adding a renovated resale counterfactual would require
+  inventing an outcome.
+- **Sensitivity flag:** High. A real flip transaction dataset would be the right
+  production backtest.
+
+### Coverage Interpretation
+
+- **Assumption:** Phase 4 reports weighted monthly empirical coverage against the
+  90% nominal CQR target.
+- **Observed:** Coverage moved from 90.1% pre-crash to 89.5% in the crash window.
+- **Interpretation:** This is a small dip below target, not a dramatic coverage
+  failure. The headline Phase 4 finding is economic drawdown reduction under thin
+  margins.
+
+---
+
+## Phase 5 App Assumptions
+
+### Feature Defaults
+
+- **Assumption:** The app user supplies a compact set of practical inputs and all
+  other Ames columns are filled from Kaggle training medians/modes stored in
+  `models/phase5/feature_defaults.json`.
+- **Exposed fields:** neighborhood, living area, overall quality, year built,
+  full baths, half baths, kitchen quality, basement area, garage spaces, and
+  garage finish.
+- **Rationale:** A screening tool should be usable without an 80-field intake
+  form, but the model still needs the full raw feature vector.
+- **Sensitivity flag:** Medium. A production tool should capture more fields or
+  provide confidence penalties for default-heavy inputs.
+
+### Runtime Artifacts
+
+- **Assumption:** The app loads saved model artifacts:
+  `models/phase1/baseline_lightgbm.joblib`, `models/phase2/cqr_90.joblib`, and
+  `models/phase5/feature_defaults.json`.
+- **Rationale:** The app is a product surface, not a training script. Runtime
+  retraining would be slow and unreproducible.
+- **Failure mode:** If an artifact is missing, the app shows a clear remediation
+  message instructing the user to run `make train uncertainty app-artifacts`.

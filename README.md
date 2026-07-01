@@ -1,237 +1,124 @@
 # Margin of Error
 
-> *An automated valuation model can be "accurate" by RMSE yet useless for underwriting,
-> because the model's prediction error is wider than the flip's profit margin.*
+> Accurate is not underwritable. The model's margin of error must be smaller than
+> the deal's profit margin.
 
----
+Margin of Error is an uncertainty-aware underwriting system for fix-and-flip and
+iBuyer-style home acquisitions. It starts with a normal Ames Housing price model,
+then turns it into a decision engine: calibrated 90% value intervals, simulated
+profit distributions, causal renovation guidance, and a walk-forward stress test
+through the 2007-2010 Ames downturn. The Zillow Offers framing is deliberate:
+buying homes near model value is dangerous when the model's uncertainty is wider
+than the margin on the deal.
 
-## The Problem
+For the deep plain-English walkthrough, read
+[docs/PROJECT_EXPLAINER.md](docs/PROJECT_EXPLAINER.md).
 
-In 2021, Zillow Offers lost roughly $500 million and shut down its iBuying division.
-The post-mortem focused on prediction accuracy — their AVM was wrong. But the deeper
-failure was epistemic: **Zillow treated a point-estimate model as a decision tool
-without accounting for its own uncertainty.** A home valued at $310k ± $40k
-purchased at $305k has a flip margin that is entirely inside the model's noise.
+![Three strategies through the downturn](reports/figures/04b_three_strategies_pnl.png)
 
-This project treats the Ames, Iowa housing dataset as a **decision-under-uncertainty**
-problem rather than a leaderboard regression task. We build the asset that Zillow's
-engineers arguably should have built: an uncertainty-aware valuation engine whose
-output is a *profit distribution*, not a price estimate, with an explicit underwriting
-decision rule.
+## Results at a Glance
 
-The title has a deliberate double meaning:
-- **Statistical margin of error** — the width of our prediction interval
-- **Profit margin** — the economic return we are trying to protect
+| Question | Result | Source |
+|---|---:|---|
+| How wrong is the Phase 1 point model in dollars? | Typical absolute error $9,413; 80th percentile $22,193 | `reports/phase1_metric_card.json` |
+| Is the 90% interval calibrated? | 90.4% empirical coverage on 292 held-out homes | `reports/phase2_metric_card.json` |
+| How wide is the honest value range? | Median 90% interval width $64,025 | `reports/phase2_metric_card.json` |
+| What does the uncertainty gate do? | Declines 164 of 292 homes; rejects 50 of the top 50 naive picks | `reports/phase2_metric_card.json` |
+| Biggest causal-vs-naive renovation gap? | Exterior quality: $425 naive vs $5,634 DML causal | `reports/phase3_metric_card.json` |
+| Did Ames crash hard? | Median price fell 6.1% from 2007 peak to 2010 trough | `reports/phase4_metric_card.json` |
+| Thin-margin iBuyer stress test | Naive max drawdown $129,522; uncertainty-aware max drawdown $21,257 | `reports/phase4_metric_card.json` |
+| Crash hit rate under iBuyer pricing | Naive 76.6%; uncertainty-aware 88.1% | `reports/phase4_metric_card.json` |
 
-The central thesis: *the statistical margin of error must be smaller than the profit
-margin of the deal for the deal to be underwritable by any honest model.*
+## What Is in the Repo
 
----
+| Phase | Deliverable |
+|---|---|
+| 1 | Baseline LightGBM valuation model with dollar residual diagnostics |
+| 2 | Conformalized Quantile Regression intervals, profit simulation, underwriting rule |
+| 3 | Double Machine Learning estimates for renovatable features |
+| 4 | Walk-forward temporal backtest with conservative flip and thin-margin iBuyer regimes |
+| 5 | Streamlit underwriting tool, project explainer, strategy memo, deck outline |
 
-## What We Build
+Key artifacts:
 
-| Phase | Deliverable | Status |
-|-------|-------------|--------|
-| 0 | Scaffold + data validation layer | Complete |
-| 1 | Baseline gradient boosting model (the strawman) | Complete |
-| 2 | CQR prediction intervals + flip P&L simulation + underwriting rule | Complete |
-| 3 | Causal estimation of renovation effects (DML) | Complete |
-| 4 | Temporal backtest through 2006–2010 housing crash | Pending |
-| 5 | Streamlit underwriting tool + strategy memo | Pending |
+- App: [src/margin_of_error/app/underwriting.py](src/margin_of_error/app/underwriting.py)
+- Explainer: [docs/PROJECT_EXPLAINER.md](docs/PROJECT_EXPLAINER.md)
+- Strategy memo: [reports/memo.md](reports/memo.md)
+- Deck outline: [reports/deck_outline.md](reports/deck_outline.md)
+- Decisions: [docs/decisions.md](docs/decisions.md)
+- Assumptions: [docs/assumptions.md](docs/assumptions.md)
 
----
+## Underwriting Tool
 
-## Quick Start
+The Streamlit app loads the saved Phase 1 point model, saved Phase 2 CQR interval
+model, Phase 3 causal uplift configuration, and Phase 5 feature-default profile.
+It exposes the property inputs that matter most for a practical underwriting
+screen: neighborhood, living area, overall quality, year built, baths, kitchen
+quality, basement area, garage spaces, and garage finish. The rest of the Ames
+feature vector is filled from dataset medians and modes.
+
+The output is designed for a portfolio screenshot: point valuation, 90% interval,
+profit distribution, APPROVE / REFER / DECLINE verdict, causal renovation guidance,
+and an assumptions expander showing the economics config.
+
+## Run It
 
 ```bash
-git clone <repo>
-cd margin-of-error
-
-# 1. Set up environment (Python 3.11+ required)
+# 1. Create the environment
 make setup
-source .venv/bin/activate
 
-# 2. Obtain data — follow data/README.md, then place files in data/raw/
-# 3. Validate data
+# 2. Add raw data files per data/README.md
 make data-check
 
-# 4. Train the Phase 1 baseline
+# 3. Reproduce the pipeline
 make train
-
-# 5. Run Phase 2 intervals + underwriting
 make uncertainty
-
-# 6. Run Phase 3 causal estimates
 make causal
+make backtest
+make app-artifacts
 
-# 7. (After Phase 5 approval)
+# 4. Run quality gates
+make lint
+make test
+
+# 5. Launch the app
 make app
 ```
 
----
+`make all` runs the full non-interactive pipeline: data check, model phases,
+app artifact build, lint, and tests. `make app` launches the Streamlit tool.
 
-## Key Design Decisions
+## Project Structure
 
-Every non-obvious modeling or economic choice has a decision note in
-[docs/decisions.md](docs/decisions.md). Every economic assumption has a rationale
-and stated source in [docs/assumptions.md](docs/assumptions.md).
-
-All assumptions live in [config/economics.yaml](config/economics.yaml) and
-[config/model.yaml](config/model.yaml). No magic constants in code.
-
----
-
-## Data
-
-- **Kaggle split** (~1,460 train / ~1,459 test): random 50/50 split, used for
-  cross-sectional model training (Phases 1–3). The random split is a deliberate
-  limitation — flagged explicitly in Phase 4 when we switch to temporal ordering.
-- **Full Ames dataset** (~2,930 rows, De Cock 2011): all sales 2006–2010, sorted
-  temporally for the crash backtest (Phase 4).
-
-See [data/README.md](data/README.md) for provenance and download instructions.
-Raw data is git-ignored.
-
----
-
-## Results Summary
-
-| Metric | Value | Phase |
-|--------|-------|-------|
-| Dumb median CV RMSE (log scale) | 0.400 ± 0.015 | 1 |
-| ElasticNet CV RMSE (log scale) | 0.126 ± 0.019 | 1 |
-| LightGBM CV RMSE (log scale) | 0.135 ± 0.015 | 1 |
-| LightGBM CV RMSE (dollars) | $28,500 ± $6,381 | 1 |
-| LightGBM median absolute dollar error | $9,413 | 1 |
-| LightGBM 80th percentile absolute dollar error | $22,193 | 1 |
-| 90% prediction interval coverage (test set) | 90.4% | 2 |
-| Median 90% interval width | $64,025 | 2 |
-| Underwriting verdicts (APPROVE / REFER / DECLINE) | 43% / 0% / 56% | 2 |
-| Top-50 naive "best buys" that fail the gate | 50 / 50 (100%) | 2 |
-| DML causal effect of one kitchen-quality step | $4,450 | 3 |
-| Largest naive-vs-causal bias | ExterQual: naive understates by $5,208 | 3 |
-| Phase 3 representative-home verdict flips | 0 / 10 | 3 |
-| Backtest: deals underwritten in 2007 that went negative | TBD | 4 |
-
-### Phase 1 Baseline
-
-Phase 1 uses the Kaggle `train.csv` random cross-sectional split (1,460 rows) and
-models `log1p(SalePrice)`. This validation does **not** test temporal regime
-robustness; Phase 4 pays that debt with the full Ames 2006-2010 time ordering.
-
-All feature learning is inside sklearn pipelines/ColumnTransformers fitted within
-CV folds. Dollar predictions use Duan smearing to correct log retransformation
-bias. The primary strawman artifact is `models/phase1/baseline_lightgbm.joblib`;
-the metric card is `reports/phase1_metric_card.json`.
-
-**Phase 1 framing hypothesis:** A typical fix-and-flip net margin is on the order
-of $10-20K; this model's typical dollar error is $9,413. If that error is
-comparable to or larger than that margin, point predictions cannot safely
-underwrite a flip.
-
-### Phase 2 — The Confrontation (uncertainty, economics, decision)
-
-Phase 2 proves the Phase 1 hypothesis and builds the decision infrastructure
-Zillow Offers lacked. It wraps — does **not** retrain — the Phase 1 model in three
-moves: (1) replace the point estimate with a calibrated **Conformalized Quantile
-Regression** interval; (2) layer the flip economics from `config/economics.yaml`
-into a per-property **profit distribution** via Monte Carlo; (3) apply a formal
-**APPROVE / REFER / DECLINE** rule that declines a flip whenever the model's
-uncertainty is too wide to bet on, regardless of how good the point estimate looks.
-
-Reproduce: `python -m margin_of_error.models.phase2` → writes
-`reports/phase2_metric_card.json`, `reports/phase2_test_underwriting.csv`,
-`reports/phase2_calibration.csv`, and the figures in `reports/figures/02*.png`.
-The argument is narrated in `notebooks/02_uncertainty.ipynb`.
-
-**The headline finding (292 held-out test homes):**
-
-- The CQR intervals are **honestly calibrated** — 90.4% empirical coverage at the
-  90% level, tracking the diagonal at every level (`02d_calibration.png`).
-- The model's **median 90% interval is $64,025 wide** (mean $83,623) — many times
-  any realistic $10–25K flip margin.
-- The underwriting rule **APPROVEs 43%, REFERs 0.3%, and DECLINEs 56%** of homes.
-- Of the **50 homes a naive point model ranks as the best opportunities, 100% fail
-  the gate** — every one declined because the model's interval is wider than the
-  acceptable band, not because the home is a bad investment.
-
-> **The Zillow connection:** A model with this interval width, applied to homes with
-> this margin profile, would have flagged 56% of its potential acquisitions as
-> *ununderwritable* — and 100% of the deals a naive point model called the best
-> buys — not because the homes were bad, but because the model did not know enough
-> to bet capital on them. That is the guardrail Zillow Offers did not have.
-
-The renovation **uplift** numbers (4/10/18%) are conservative *priors*, not
-findings — Phase 3 replaces them with data-derived causal estimates.
-
-### Phase 3 — Causal Renovation Effects
-
-Phase 3 asks a different question than prediction: which renovations *cause*
-sale-price lift after controlling for the confounders that make naive coefficients
-misleading? The implementation uses manual 5-fold cross-fitted Double Machine
-Learning: LightGBM residualizes both `log1p(SalePrice)` and each treatment on the
-fixed/confounding feature set, then HC3-robust OLS estimates the residual-on-
-residual causal coefficient. Dollar effects use the local approximation
-`coefficient × median(SalePrice)`.
-
-Reproduce: `python -m margin_of_error.causal.dml` or `make causal` → writes
-`reports/phase3_causal_effects.csv`, `reports/phase3_underwriting_comparison.csv`,
-`reports/phase3_metric_card.json`, populates `config/economics.yaml`
-`causal_renovation_uplifts`, and saves figures `reports/figures/03*.png`.
-
-| Feature | Naive OLS | DML Causal | 95% CI | Significant? | Bias |
-|---|---:|---:|---:|---|---:|
-| ExterQual | $425 | $5,634 | $2,063 to $9,204 | yes | -$5,208 |
-| FullBath | -$445 | $2,492 | -$2,165 to $7,148 | no | -$2,937 |
-| HalfBath | $4,238 | $2,481 | -$683 to $5,645 | no | $1,757 |
-| BsmtFullBath | $9,581 | $8,520 | $5,717 to $11,323 | yes | $1,062 |
-| GarageFinish | $2,641 | $3,524 | $1,619 to $5,429 | yes | -$883 |
-| FireplaceQu | $932 | $1,699 | -$1,171 to $4,568 | no | -$766 |
-| HeatingQC | $2,087 | $1,548 | -$23 to $3,119 | no | $539 |
-| KitchenQual | $4,146 | $4,450 | $1,824 to $7,076 | yes | -$304 |
-| BsmtFinType1 | $2,468 | $2,429 | $1,818 to $3,040 | yes | $39 |
-
-Registry verification excluded `BsmtQual`, `Fireplaces`, and `GarageCars` as
-treatments because the Phase 1 registry tags them fixed; `OverallQual` and
-`OverallCond` are forced confounders. In the 10 representative Phase 2 homes,
-causal-vs-correlational renovation assumptions produced **0 verdict flips** under
-the current 70%-rule/interval-width guardrail. The profit distributions still move
-materially, but not enough to cross the APPROVE / DECLINE thresholds in this sample.
-
----
-
-## Repository Structure
-
-```
+```text
 margin-of-error/
-├── config/          # economics.yaml, model.yaml — all versioned assumptions
-├── data/            # gitignored; README explains how to obtain files
-├── docs/            # decisions.md (ADR log), assumptions.md
-├── notebooks/       # Exploration only; logic lives in src/
-├── reports/         # Generated figures + strategy memo
+├── config/          # model and economics assumptions
+├── data/            # raw files are gitignored; see data/README.md
+├── docs/            # explainer, decisions, assumptions
+├── models/          # saved Phase 1 and Phase 2 app artifacts
+├── notebooks/       # narrative notebooks; production logic lives in src/
+├── reports/         # metric cards, memo, deck outline, generated figures
 ├── src/margin_of_error/
-│   ├── config.py    # Pydantic config loaders
-│   ├── data/        # Loaders, data dictionary parser, pandera schemas, cleaning
-│   ├── features/    # Feature engineering; mutable vs. fixed feature registries
-│   ├── models/      # Baseline + CQR conformal interval model
-│   ├── economics/   # Flip P&L simulation
-│   ├── causal/      # DML estimation of renovation effects
-│   ├── backtest/    # Temporal walk-forward (2006–2010)
-│   ├── viz/         # Signature charts
-│   └── app/         # Streamlit underwriting tool
+│   ├── app/         # Phase 5 Streamlit tool and artifact loaders
+│   ├── backtest/    # Phase 4 walk-forward stress test
+│   ├── causal/      # Phase 3 DML estimation
+│   ├── economics/   # profit simulation and verdict rule
+│   ├── models/      # Phase 1 baseline and Phase 2 CQR
+│   └── viz/         # signature charts
 └── tests/
 ```
 
----
+## Data
 
-## Reproducibility
+Phases 1-3 use Kaggle's random Ames competition training split (1,460 rows).
+Phase 4 uses the full De Cock Ames dataset (2,930 sales, 2006-2010) sorted by
+`YrSold` and `MoSold`. Raw data is not committed; see
+[data/README.md](data/README.md) for download instructions.
 
-- Global seeds set in `config/model.yaml` and propagated via `src/margin_of_error/config.py`
-- All experiments can be reproduced from a clean clone: `make setup && make data-check && make train`
-- Pinned dependencies via `requirements-lock.txt` (generated by `make setup`)
+## Caveats
 
----
-
-## License
-
-Code: MIT. Data: see [data/README.md](data/README.md) for dataset-specific terms.
+This is a decision-system portfolio project, not a live investment product. Ames
+is one market, the renovation costs are documented assumptions, the causal layer
+is observational, and the backtest uses synthetic acquisition prices rather than
+true buy-renovate-resell pairs. Those caveats are part of the story and are
+spelled out in the explainer.
