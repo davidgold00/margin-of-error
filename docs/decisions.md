@@ -1,7 +1,23 @@
 # Architecture Decision Records (ADR Log)
 
-Lightweight log of non-obvious modeling, infrastructure, and economic choices.
-Each entry: context → decision → tradeoff. New entries appended chronologically.
+This is the project's decision journal: a chronological log of every
+non-obvious modeling, infrastructure, and economic judgment call, written down
+at the moment it was made. Where `docs/assumptions.md` records *parameter
+values* (what a kitchen remodel costs), this file records *choices* (why CQR
+over symmetric intervals, why the backtest uses an 85% iBuyer factor rather
+than 90%, why EconML was swapped for a hand-rolled DML implementation).
+
+**How to read an entry:** each ADR states the **context** (what question was
+on the table), the **decision** (what was chosen), and the **tradeoff** (what
+was given up, and how that cost is mitigated). Entries are numbered and
+appended chronologically, never rewritten — when a decision is reversed, a
+later ADR supersedes it and the original is annotated with a pointer (see
+ADR-003 → ADR-015 for an example). That means this file doubles as an honest
+history: you can watch the project change its mind and see why.
+
+**Why keep it:** every "why did you do X instead of Y?" question about this
+project should have a written answer here, dated and reasoned, rather than a
+reconstructed one.
 
 ---
 

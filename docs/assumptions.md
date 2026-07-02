@@ -1,10 +1,27 @@
 # Modeling and Economic Assumptions
 
-Every non-default assumption used in any phase of this project is catalogued here
-with its rationale and source. If you disagree with an assumption, change the value
-in the relevant config file and re-run — no buried constants.
+Every result in this project sits on top of assumptions — what a renovation
+costs, how long a flip takes, what transaction fees run, how the model is
+validated. This file is the complete catalog: **every non-default assumption
+used in any phase, with its rationale, its source, and a sensitivity flag**
+indicating how much the conclusions would move if the assumption is wrong.
 
-**Format:** Assumption → Rationale → Source → Sensitivity flag
+Three things make this catalog more than documentation:
+
+1. **No buried constants.** Every economic parameter lives in
+   `config/economics.yaml` or `config/model.yaml`, never hard-coded — a test
+   in the suite enforces this. If you disagree with an assumption, change the
+   YAML value and re-run; the metric cards will regenerate under your number.
+2. **Placeholders are labeled.** Values marked **PLACEHOLDER** are documented
+   estimates (usually national averages) that a production deployment must
+   replace with local data. They are flagged, not hidden.
+3. **Sensitivity flags tell you where to push.** "High" means the headline
+   conclusions are meaningfully exposed to this value; "Low" means they are
+   not. If you want to attack the project, start with the High rows.
+
+**How to read each entry:** Assumption → Rationale → Source → Sensitivity
+flag. Design decisions (as opposed to parameter values) live in the companion
+ADR log, `docs/decisions.md`.
 
 ---
 
