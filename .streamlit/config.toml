@@ -1,0 +1,14 @@
+# Streamlit theme for the Margin of Error underwriting tool.
+# Palette follows the project's chart tokens (see src/margin_of_error/app/underwriting.py):
+# ink #0b0b0b on warm off-white surfaces, primary blue #2a78d6.
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f2f1ed"
+textColor = "#0b0b0b"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

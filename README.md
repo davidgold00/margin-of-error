@@ -133,6 +133,7 @@ the judgment calls behind the design are logged as ADRs in
 Reading order for the prose, if you want it: the
 [explainer](docs/PROJECT_EXPLAINER.md) for depth, the
 [memo](reports/memo.md) for the one-page executive version, the
+[app guide](docs/APP_GUIDE.md) for driving the tool, and the
 [deck outline](reports/deck_outline.md) if you're presenting it.
 
 ## The app
@@ -141,11 +142,16 @@ Reading order for the prose, if you want it: the
 (Phase 1 point model, Phase 2 interval model, Phase 3 causal uplifts — no
 retraining at runtime), takes the property facts an underwriter would
 actually have on hand, and fills the rest of the Ames feature vector from
-dataset medians. Out comes the full screen: point valuation, 90% interval,
-simulated profit distribution, an APPROVE / REFER / DECLINE verdict with its
-reason, renovation guidance, and an expander showing every assumption behind
-the numbers. If an artifact is missing it tells you which make targets to
-run instead of stack-tracing at you.
+dataset medians. Out comes the full screen: the verdict with the three
+checks that produced it (each shown with this house's numbers against its
+threshold), the calibrated 90% value range, the simulated profit
+distribution, causal renovation guidance, and every assumption behind the
+numbers in plain English. If an artifact is missing it tells you which make
+targets to run instead of stack-tracing at you.
+
+There's a full guide to the app — every input and output explained, how to
+read the charts, and a set of one-minute experiments that reproduce the
+project's findings — in [docs/APP_GUIDE.md](docs/APP_GUIDE.md).
 
 ## Running it
 
