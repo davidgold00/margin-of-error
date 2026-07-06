@@ -8,30 +8,29 @@
 
 In 2021, Zillow shut down Zillow Offers, the arm of the company that used
 their pricing algorithm to buy houses directly, touch them up, and flip them.
-They lost hundreds of millions of dollars doing it. The part that stuck with
-me: their model wasn't even bad. It was a perfectly decent price predictor.
+They lost hundreds of millions of dollars doing it. But the model wasn't that bad. 
+It was a decent price predictor.
 The mistake was treating a single predicted number as if it were a safe
 buying decision, when the honest uncertainty around that number was wider
-than the profit they were chasing.
+than the profit they were chasing. 
 
 Meanwhile, every data science student on earth (me included) learns
 regression on the Ames housing dataset by chasing a lower RMSE and calling it
-a day. Those two facts together are the whole project. I wanted to take the
-most leaderboard-brained dataset there is and ask the question Zillow should
-have asked about every single house:
+a day. Those two facts together are the whole project. This project asks:
 
 **Is the model certain enough about *this* house to bet real money on it?**
 
-Answering that properly took five phases: a solid baseline price model, a
-calibrated uncertainty layer wrapped around it, a causal look at which
-renovations actually create value, a walk-forward backtest through the
-2007–2010 downturn, and finally a small Streamlit app so a human can actually
-use the thing.
+Answering that properly took five phases: 
+1. a solid baseline price model,
+2. a calibrated uncertainty layer wrapped around it
+3. a causal look at which renovations actually create value
+4. a walk-forward backtest through the 2007–2010 downturn
+5. an app to be able to actually use it
 
 If you want the full plain-English walkthrough — every concept explained from
-scratch, every number interpreted — that lives in
-[docs/PROJECT_EXPLAINER.md](docs/PROJECT_EXPLAINER.md). It's long, but it's
-the document I'd hand someone who wanted to really get it.
+scratch, every number interpreted, refer to
+[docs/PROJECT_EXPLAINER.md](docs/PROJECT_EXPLAINER.md). It is very long, but it's
+the document I'd hand someone who wanted to really get it. 
 
 ![Three strategies through the downturn](reports/figures/04b_three_strategies_pnl.png)
 
